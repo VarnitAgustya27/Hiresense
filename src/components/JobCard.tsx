@@ -1,24 +1,45 @@
 import { useState } from "react";
-import { Bookmark, MapPin, Building2, Clock, Sparkles } from "lucide-react";
+import { Bookmark, MapPin } from "lucide-react";
 import type { Job, StructuredJobListing } from "@/types/database.types";
 import { CompanyLogo } from "@/components/CompanyLogo";
+import { type ApplicationRecord, getApplicationCardStatus } from "@/lib/applications";
 
 interface JobCardProps {
   job: Job;
   isSelected?: boolean;
   onSelect: (job: Job) => void;
   isRecruiter?: boolean;
+  application?: ApplicationRecord | null;
+  isBookmarked?: boolean;
+  onToggleBookmark?: (jobId: string) => void;
   onEdit?: (job: Job) => void;
   onToggleStatus?: (job: Job) => void;
 }
 
-export function JobCard({ job, isSelected = false, onSelect, isRecruiter = false }: JobCardProps) {
-  const [isBookmarked, setIsBookmarked] = useState(false);
+export function JobCard({
+  job,
+  isSelected = false,
+  onSelect,
+  isRecruiter = false,
+  application = null,
+  isBookmarked: externalBookmarked,
+  onToggleBookmark,
+}: JobCardProps) {
+  const [internalBookmarked, setInternalBookmarked] = useState(false);
+  const isBookmarked = externalBookmarked !== undefined ? externalBookmarked : internalBookmarked;
+
+  const handleBookmarkClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onToggleBookmark) {
+      onToggleBookmark(job.id);
+    } else {
+      setInternalBookmarked(!internalBookmarked);
+    }
+  };
 
   // Parse structured data safely
   const structured = (job.generated_posting || {}) as Partial<StructuredJobListing>;
   const isDraft = job.status === "draft";
-  const isPublished = job.status === "published";
 
   // Check if job is "New" (created within last 5 days)
   const isNew = (() => {
@@ -34,6 +55,7 @@ export function JobCard({ job, isSelected = false, onSelect, isRecruiter = false
   const employmentType = job.job_type || structured.employment_type || "Full-time";
 
   const topTech = (structured.tech_stack || []).slice(0, 3);
+  const applicationStatus = getApplicationCardStatus(application);
 
   return (
     <article
@@ -53,10 +75,16 @@ export function JobCard({ job, isSelected = false, onSelect, isRecruiter = false
             </span>
           )}
 
-          {/* Accent #0066ff reserved for commercial / status signal */}
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#0066ff]/15 text-[#0066ff] text-[11px] font-[600] border border-[#0066ff]/30">
-            Easily apply
-          </span>
+          {/* Applied Status Pill (monochrome hairline) vs Accent Easily Apply */}
+          {!isRecruiter && applicationStatus ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#1a1a1a] text-[#f5f5f5] text-[11px] font-[600] border border-[rgba(255,255,255,0.18)]">
+              {applicationStatus}
+            </span>
+          ) : !isRecruiter ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#0066ff]/15 text-[#0066ff] text-[11px] font-[600] border border-[#0066ff]/30">
+              Easily apply
+            </span>
+          ) : null}
 
           {workMode && (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#1a1a1a] text-[#8a8a8a] text-[11px] font-[600] border border-[rgba(255,255,255,0.06)] capitalize">
@@ -80,10 +108,7 @@ export function JobCard({ job, isSelected = false, onSelect, isRecruiter = false
         {/* Bookmark Icon Button */}
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsBookmarked(!isBookmarked);
-          }}
+          onClick={handleBookmarkClick}
           aria-label={isBookmarked ? "Remove bookmark" : "Bookmark job"}
           className="p-1.5 rounded-full text-[#8a8a8a] hover:text-[#f5f5f5] hover:bg-[#262626] transition-colors"
         >

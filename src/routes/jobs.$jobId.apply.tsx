@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   ArrowLeft,
   Briefcase,
@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ShieldCheck,
   ChevronRight,
+  FileText,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Job, StructuredJobListing } from "@/types/database.types";
@@ -25,6 +26,13 @@ import {
   analyzeResumeDeterministically,
   type ResumeAnalysisResult,
 } from "@/lib/ai-analyzer";
+import { MediaSessionProvider } from "@/hooks/useMediaSession";
+import {
+  recordJobOpened,
+  recordResumeUploaded,
+  getApplication,
+  findApplicationForJob,
+} from "@/lib/applications";
 
 export const Route = createFileRoute("/jobs/$jobId/apply")({
   head: () => ({
@@ -36,8 +44,16 @@ export const Route = createFileRoute("/jobs/$jobId/apply")({
       },
     ],
   }),
-  component: JobApplyPage,
+  component: JobApplyPageWrapper,
 });
+
+function JobApplyPageWrapper() {
+  return (
+    <MediaSessionProvider>
+      <JobApplyPage />
+    </MediaSessionProvider>
+  );
+}
 
 // Fallback demo job when database has no record for the requested jobId
 const DEMO_JOB_FALLBACK: Job = {
@@ -143,41 +159,97 @@ function JobApplyPage() {
   const { jobId } = Route.useParams();
   const navigate = useNavigate();
 
+  // Immediate synchronous lookup from local storage to prevent any UI flashing
+  const immediateApp = typeof window !== "undefined" ? findApplicationForJob(jobId) : null;
+  const hasSavedResume = Boolean(immediateApp?.resume?.analysisResult);
+
+  const [userId, setUserId] = useState<string>("guest_user");
   const [job, setJob] = useState<Job>(DEMO_JOB_FALLBACK);
   const [jobLoading, setJobLoading] = useState(true);
+  const [isInitialChecking, setIsInitialChecking] = useState<boolean>(!hasSavedResume);
+
+  const memoizedJobPosting = useMemo(
+    () => (job.generated_posting as Record<string, unknown>) || {},
+    [job.generated_posting],
+  );
 
   // Application state: "input" | "analyzing" | "result"
-  const [stage, setStage] = useState<"input" | "analyzing" | "result">("input");
-  const [analysisResult, setAnalysisResult] = useState<ResumeAnalysisResult | null>(null);
+  const [stage, setStage] = useState<"input" | "analyzing" | "result">(
+    hasSavedResume ? "result" : "input",
+  );
+  const [analysisResult, setAnalysisResult] = useState<ResumeAnalysisResult | null>(
+    immediateApp?.resume?.analysisResult || null,
+  );
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(
+    immediateApp?.resume?.fileName || null,
+  );
+  const [preferredLanguage, setPreferredLanguage] = useState<"en" | "hi" | "hinglish">(
+    immediateApp?.language || "en",
+  );
   const [analyzingStep, setAnalyzingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch job from Supabase
+  // Fetch job & check existing application to jump to furthest step
   useEffect(() => {
-    async function fetchJob() {
+    let active = true;
+
+    async function loadData() {
       try {
         setJobLoading(true);
-        const { data, error } = await supabase
+        const { data, error: jobErr } = await supabase
           .from("jobs")
           .select("*")
           .eq("id", jobId)
           .maybeSingle();
 
-        if (data && !error) {
-          setJob(data as Job);
-        } else {
-          // Keep demo fallback
-          setJob(DEMO_JOB_FALLBACK);
+        if (active) {
+          if (data && !jobErr) {
+            setJob(data as Job);
+          } else {
+            setJob(DEMO_JOB_FALLBACK);
+          }
         }
       } catch (err) {
         console.warn("Could not load job from database, using fallback:", err);
-        setJob(DEMO_JOB_FALLBACK);
+        if (active) setJob(DEMO_JOB_FALLBACK);
+      }
+
+      // Check user & local applications store
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const uid = user?.id || "guest_user";
+        if (active) {
+          setUserId(uid);
+          recordJobOpened(uid, jobId);
+
+          // Jump to furthest completed step if saved application exists
+          const existingApp = getApplication(uid, jobId) || findApplicationForJob(jobId, uid);
+          if (existingApp?.resume?.analysisResult) {
+            setAnalysisResult(existingApp.resume.analysisResult);
+            setUploadedFileName(existingApp.resume.fileName);
+            if (existingApp.language) {
+              setPreferredLanguage(existingApp.language);
+            }
+            setStage("result");
+          }
+        }
+      } catch (authErr) {
+        console.warn("Auth check fallback:", authErr);
       } finally {
-        setJobLoading(false);
+        if (active) {
+          setIsInitialChecking(false);
+          setJobLoading(false);
+        }
       }
     }
 
-    fetchJob();
+    loadData();
+
+    return () => {
+      active = false;
+    };
   }, [jobId]);
 
   // Handle resume submission and AI analysis
@@ -196,7 +268,7 @@ function JobApplyPage() {
         jobId: job.id,
         jobTitle: job.title,
         jobCompany: job.company_name,
-        jobPosting: (job.generated_posting as any) || {},
+        jobPosting: (job.generated_posting as Record<string, unknown>) || {},
         resumeText: uploadData.resumeText,
         resumeBase64: uploadData.resumeBase64 || "",
         resumeFileName: uploadData.fileName,
@@ -219,7 +291,27 @@ function JobApplyPage() {
         );
       }
 
-      // Persist application if user is logged in
+      // Record in client persistence store (Phase 2.1)
+      const langChoice = (
+        uploadData.preferredLanguage === "code_mixed" ? "hinglish" : uploadData.preferredLanguage
+      ) as "en" | "hi" | "hinglish";
+
+      setUploadedFileName(uploadData.fileName);
+      setPreferredLanguage(langChoice);
+
+      recordResumeUploaded(
+        userId,
+        job.id,
+        {
+          fileName: uploadData.fileName,
+          uploadedAt: new Date().toISOString(),
+          parsedSummary: result.executive_summary,
+          analysisResult: result,
+        },
+        langChoice,
+      );
+
+      // Persist application to Supabase if user is logged in
       try {
         const {
           data: { user },
@@ -230,20 +322,20 @@ function JobApplyPage() {
             job_id: job.id,
             student_id: user.id,
             match_score: result.overall_fit_percentage,
-            match_report: result as any,
+            match_report: result as unknown as Record<string, unknown>,
             status: "screened",
             result_published: true,
           });
         }
       } catch (dbErr) {
-        console.warn("Could not save application record:", dbErr);
+        console.warn("Could not save application record to database:", dbErr);
       }
 
       setAnalysisResult(result);
       setStage("result");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Resume analysis failure:", err);
-      setError(err?.message || "Failed to analyze resume. Please try again.");
+      setError(err instanceof Error ? err.message : "Failed to analyze resume. Please try again.");
       setStage("input");
     } finally {
       clearTimeout(t1);
@@ -329,15 +421,30 @@ function JobApplyPage() {
           </div>
         </div>
 
-        {/* Dynamic State 1: Input / Upload */}
-        {stage === "input" && (
+        {/* Dynamic State 0: Application Status Checking Loader */}
+        {isInitialChecking ? (
+          <div className="rounded-[24px] bg-[#141414] border border-[rgba(255,255,255,0.10)] p-12 text-center space-y-5 max-w-lg mx-auto my-12 animate-in fade-in duration-200 shadow-2xl">
+            <div className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-[30%] bg-[#1a1a1a] border border-[rgba(255,255,255,0.12)] text-[#f5f5f5]">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-[rgba(255,255,255,0.15)] border-t-[#f5f5f5]" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-[18px] font-[650] text-[#f5f5f5] tracking-tight">
+                Checking application status.
+              </h3>
+              <p className="text-[13px] text-[#8a8a8a]">
+                Retrieving your saved resume and interview progress...
+              </p>
+            </div>
+          </div>
+        ) : stage === "input" ? (
           <ResumeUploadCard
             onAnalyze={handleAnalyzeResume}
             isLoading={false}
             jobTitle={job.title}
             companyName={job.company_name}
           />
-        )}
+        ) : null}
 
         {/* Dynamic State 2: AI Analyzing Animation */}
         {stage === "analyzing" && (
@@ -418,6 +525,12 @@ function JobApplyPage() {
                 <span className="text-[13px] font-[600] text-[#f5f5f5]">
                   Analysis Complete for {analysisResult.candidate_name}
                 </span>
+                {uploadedFileName && (
+                  <span className="text-[12px] text-[#8a8a8a] flex items-center gap-1.5 bg-[#1a1a1a] px-2.5 py-0.5 rounded-full border border-[rgba(255,255,255,0.06)]">
+                    <FileText size={12} className="text-[#f5f5f5]" />
+                    <span className="truncate max-w-[180px]">{uploadedFileName}</span>
+                  </span>
+                )}
                 <span className="text-[12px] text-[#707070]">
                   ({new Date(analysisResult.analyzed_at).toLocaleTimeString()})
                 </span>
@@ -429,7 +542,7 @@ function JobApplyPage() {
                 className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#1a1a1a] border border-[rgba(255,255,255,0.12)] px-4 text-[12px] font-[600] text-[#f5f5f5] hover:bg-[#262626] transition-colors"
               >
                 <RefreshCw size={13} />
-                <span>Upload different resume</span>
+                <span>Replace resume</span>
               </button>
             </div>
 
@@ -455,10 +568,12 @@ function JobApplyPage() {
 
             {/* 4. Option to Start the AI Interview (as requested by user) */}
             <InterviewLaunchCard
+              userId={userId}
+              jobId={job.id}
               candidateName={analysisResult.candidate_name}
               targetJobTitle={job.title}
-              jobPosting={(job.generated_posting as any) || {}}
-              preferredLanguage="en"
+              jobPosting={memoizedJobPosting}
+              preferredLanguage={preferredLanguage}
               verificationQuestions={analysisResult.verification_questions}
             />
           </div>

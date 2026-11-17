@@ -62,9 +62,7 @@ import { Video } from "@remotion/media";
 
 const { fps } = useVideoConfig();
 
-return (
-  <Video from={fps} src={staticFile("video.mp4")} />
-);
+return <Video from={fps} src={staticFile("video.mp4")} />;
 ```
 
 The video will appear after 1 second.
@@ -157,7 +155,7 @@ const frame = useCurrentFrame();
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   })}
-/>
+/>;
 ```
 
 ## Pitch

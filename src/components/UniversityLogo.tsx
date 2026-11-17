@@ -91,11 +91,7 @@ export function UniversityLogo({
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center rounded-[6px] bg-[#141414] text-[#f5f5f5] font-[650]">
-          {initials.length <= 2 ? (
-            initials
-          ) : (
-            <GraduationCap size={18} className="text-[#8a8a8a]" />
-          )}
+          {initials.length <= 2 ? initials : <GraduationCap size={18} className="text-[#8a8a8a]" />}
         </div>
       )}
     </div>

@@ -74,10 +74,10 @@ export function MiraWaveform({
           state === "speaking"
             ? `rgba(245, 245, 245, ${0.4 + 0.6 * envelope})`
             : state === "listening"
-            ? `rgba(96, 165, 250, ${0.45 + 0.55 * envelope})` // soft blue tint for active listening
-            : state === "thinking"
-            ? `rgba(212, 212, 212, ${0.35 + 0.5 * envelope})`
-            : `rgba(138, 138, 138, ${0.25 + 0.35 * envelope})`;
+              ? `rgba(96, 165, 250, ${0.45 + 0.55 * envelope})` // soft blue tint for active listening
+              : state === "thinking"
+                ? `rgba(212, 212, 212, ${0.35 + 0.5 * envelope})`
+                : `rgba(138, 138, 138, ${0.25 + 0.35 * envelope})`;
 
         ctx.beginPath();
         ctx.roundRect(x - barWidth / 2, yTop, barWidth, barHeight, barWidth / 2);
@@ -98,8 +98,8 @@ export function MiraWaveform({
     size === "sm"
       ? { width: 140, height: 40 }
       : size === "lg"
-      ? { width: 340, height: 80 }
-      : { width: 240, height: 56 };
+        ? { width: 340, height: 80 }
+        : { width: 240, height: 56 };
 
   return (
     <div className={`relative flex items-center justify-center ${className}`}>

@@ -16,9 +16,7 @@ export function AnalysisStrengthsGaps({ summary, strengths, gaps }: AnalysisStre
           <Sparkles size={16} className="text-[#60a5fa]" />
           <span>Profile Summary & Analysis Overview</span>
         </div>
-        <p className="text-[15px] font-[450] leading-relaxed text-[#9a9a9a]">
-          {summary}
-        </p>
+        <p className="text-[15px] font-[450] leading-relaxed text-[#9a9a9a]">{summary}</p>
       </div>
 
       {/* 2. Side-by-Side: Strengths vs Gaps */}
@@ -96,7 +94,8 @@ export function AnalysisStrengthsGaps({ summary, strengths, gaps }: AnalysisStre
                 <CheckCircle2 size={24} className="text-emerald-400 mx-auto" />
                 <p className="text-[14px] font-[650] text-[#f5f5f5]">No major gaps detected!</p>
                 <p className="text-[12px] text-[#8a8a8a]">
-                  Your resume demonstrates coverage for all primary mandatory and preferred criteria.
+                  Your resume demonstrates coverage for all primary mandatory and preferred
+                  criteria.
                 </p>
               </div>
             ) : (

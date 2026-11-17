@@ -93,11 +93,13 @@ export function AddJobModal({
       setModelName(result.model_name);
       setPromptVersion(result.prompt_version);
       setStep("preview");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("AI Generation error:", err);
-      setGenerationError(
-        err?.message || "Failed to generate structured listing. You may retry or fill manually.",
-      );
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Failed to generate structured listing. You may retry or fill manually.";
+      setGenerationError(msg);
     } finally {
       setGenerating(false);
     }
@@ -123,7 +125,7 @@ export function AddJobModal({
         salary_period: structured.salary?.period || "month",
         salary_display: structured.salary?.display || salary || "Not specified",
         raw_input: description,
-        generated_posting: structured as any,
+        generated_posting: structured as unknown as Record<string, unknown>,
         model_name: modelName,
         prompt_version: promptVersion,
         status,
@@ -137,9 +139,11 @@ export function AddJobModal({
 
       onSuccess(data as Job);
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save listing error:", err);
-      setSaveError(err?.message || "Failed to save job listing. Please try again.");
+      const msg =
+        err instanceof Error ? err.message : "Failed to save job listing. Please try again.";
+      setSaveError(msg);
     } finally {
       setSaving(false);
     }
@@ -489,7 +493,7 @@ export function AddJobModal({
                       onChange={(e) =>
                         setStructured({
                           ...structured,
-                          work_mode: (e.target.value as any) || null,
+                          work_mode: (e.target.value as "remote" | "hybrid" | "onsite") || null,
                         })
                       }
                       className="w-full h-10 px-3 rounded-[16px] bg-[#1f1f1f] text-[#f5f5f5] text-[13px] focus:outline-none focus:ring-2 focus:ring-[#f5f5f5]"
@@ -732,7 +736,12 @@ export function AddJobModal({
                     />
                     <select
                       value={newTechReqType}
-                      onChange={(e) => setNewTechReqType(e.target.value as any)}
+                      onChange={(e) =>
+                        setNewTechReqType(
+                          e.target.value as
+                            "mandatory" | "preferred" | "contextual" | "informational",
+                        )
+                      }
                       className="h-9 px-3 rounded-[16px] bg-[#1f1f1f] text-[#f5f5f5] text-[12px] focus:outline-none focus:ring-2 focus:ring-[#f5f5f5]"
                     >
                       <option value="mandatory">Mandatory</option>

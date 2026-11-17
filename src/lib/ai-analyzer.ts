@@ -97,10 +97,34 @@ export function analyzeResumeDeterministically(
     "Familiarity with Supabase or PostgreSQL",
   ];
   const techStack = posting.tech_stack || [
-    { name: "React", canonical_name: "React", category: "frontend", devicon_slug: "react", requirement_type: "mandatory" as RequirementType },
-    { name: "TypeScript", canonical_name: "TypeScript", category: "frontend", devicon_slug: "typescript", requirement_type: "mandatory" as RequirementType },
-    { name: "Tailwind CSS", canonical_name: "Tailwind CSS", category: "frontend", devicon_slug: "tailwindcss", requirement_type: "preferred" as RequirementType },
-    { name: "Node.js", canonical_name: "Node.js", category: "backend", devicon_slug: "nodejs", requirement_type: "mandatory" as RequirementType },
+    {
+      name: "React",
+      canonical_name: "React",
+      category: "frontend",
+      devicon_slug: "react",
+      requirement_type: "mandatory" as RequirementType,
+    },
+    {
+      name: "TypeScript",
+      canonical_name: "TypeScript",
+      category: "frontend",
+      devicon_slug: "typescript",
+      requirement_type: "mandatory" as RequirementType,
+    },
+    {
+      name: "Tailwind CSS",
+      canonical_name: "Tailwind CSS",
+      category: "frontend",
+      devicon_slug: "tailwindcss",
+      requirement_type: "preferred" as RequirementType,
+    },
+    {
+      name: "Node.js",
+      canonical_name: "Node.js",
+      category: "backend",
+      devicon_slug: "nodejs",
+      requirement_type: "mandatory" as RequirementType,
+    },
   ];
   const responsibilities = posting.responsibilities || [
     "Develop and maintain high quality user interfaces",
@@ -134,7 +158,9 @@ export function analyzeResumeDeterministically(
 
       // Extract a line snippet containing the term
       const lines = resumeText.split(/\r?\n/);
-      const matchingLine = lines.find((l) => new RegExp(`\\b${foundTerm}\\b`, "i").test(l)) || `${tech.canonical_name} featured in background experience.`;
+      const matchingLine =
+        lines.find((l) => new RegExp(`\\b${foundTerm}\\b`, "i").test(l)) ||
+        `${tech.canonical_name} featured in background experience.`;
 
       matrix.push({
         requirement: `${tech.name} (${tech.category})`,
@@ -174,7 +200,10 @@ export function analyzeResumeDeterministically(
 
   // Audit mandatory qualifications
   mandatoryQuals.forEach((qual) => {
-    const words = qual.toLowerCase().split(/\s+/).filter((w) => w.length > 4);
+    const words = qual
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 4);
     const matchCount = words.filter((w) => lowerResume.includes(w)).length;
     const isPartial = matchCount >= 1 && matchCount < words.length * 0.6;
     const isMatched = matchCount >= words.length * 0.6;
@@ -201,7 +230,8 @@ export function analyzeResumeDeterministically(
         type: "mandatory",
         severity: "moderate",
         impact: "Core requirement is only partially verified from resume text.",
-        recommendation: "Be prepared to walk through your direct experience regarding this requirement.",
+        recommendation:
+          "Be prepared to walk through your direct experience regarding this requirement.",
       });
     } else {
       matrix.push({
@@ -223,7 +253,10 @@ export function analyzeResumeDeterministically(
 
   // Audit preferred qualifications
   preferredQuals.forEach((qual) => {
-    const words = qual.toLowerCase().split(/\s+/).filter((w) => w.length > 4);
+    const words = qual
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 4);
     const matchCount = words.filter((w) => lowerResume.includes(w)).length;
     if (matchCount >= words.length * 0.5) {
       preferredMatchedCount++;
@@ -246,8 +279,14 @@ export function analyzeResumeDeterministically(
   });
 
   // Calculate scores
-  const totalMandatory = (techStack.filter((t) => t.requirement_type === "mandatory").length + mandatoryQuals.length) || 1;
-  const skillsScore = Math.min(100, Math.round((mandatoryMatchedCount / totalMandatory) * 85 + (preferredMatchedCount > 0 ? 15 : 0)));
+  const totalMandatory =
+    techStack.filter((t) => t.requirement_type === "mandatory").length + mandatoryQuals.length || 1;
+  const skillsScore = Math.min(
+    100,
+    Math.round(
+      (mandatoryMatchedCount / totalMandatory) * 85 + (preferredMatchedCount > 0 ? 15 : 0),
+    ),
+  );
 
   // Experience fit
   const expMatches = lowerResume.match(/(\d+)\+?\s*(years?|yrs?)/gi) || [];
@@ -259,31 +298,48 @@ export function analyzeResumeDeterministically(
   const expScore = detectedYears > 0 ? Math.min(100, Math.max(40, detectedYears * 22)) : 50;
 
   // Project fit
-  const hasProjects = lowerResume.includes("project") || lowerResume.includes("built") || lowerResume.includes("architected") || lowerResume.includes("developed");
+  const hasProjects =
+    lowerResume.includes("project") ||
+    lowerResume.includes("built") ||
+    lowerResume.includes("architected") ||
+    lowerResume.includes("developed");
   const projectScore = hasProjects ? 85 : 55;
 
   // Education fit
-  const hasDegree = lowerResume.includes("bachelor") || lowerResume.includes("master") || lowerResume.includes("b.tech") || lowerResume.includes("b.e.") || lowerResume.includes("computer science") || lowerResume.includes("degree") || lowerResume.includes("b.s.");
+  const hasDegree =
+    lowerResume.includes("bachelor") ||
+    lowerResume.includes("master") ||
+    lowerResume.includes("b.tech") ||
+    lowerResume.includes("b.e.") ||
+    lowerResume.includes("computer science") ||
+    lowerResume.includes("degree") ||
+    lowerResume.includes("b.s.");
   const educationScore = hasDegree ? 90 : 65;
 
   // Responsibility alignment
   let respMatches = 0;
   responsibilities.forEach((r) => {
-    const tokens = r.toLowerCase().split(/\s+/).filter((t) => t.length > 5);
+    const tokens = r
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length > 5);
     if (tokens.some((t) => lowerResume.includes(t))) respMatches++;
   });
-  const responsibilityScore = Math.min(100, Math.max(40, Math.round((respMatches / (responsibilities.length || 1)) * 90 + 10)));
+  const responsibilityScore = Math.min(
+    100,
+    Math.max(40, Math.round((respMatches / (responsibilities.length || 1)) * 90 + 10)),
+  );
 
   // Evidence quality score
   const evidenceQualityScore = resumeText.length > 1200 ? 90 : resumeText.length > 600 ? 75 : 50;
 
   // Composite Match Score Formula from GEMINI.md:
   const rawScore =
-    0.40 * skillsScore +
-    0.20 * expScore +
+    0.4 * skillsScore +
+    0.2 * expScore +
     0.15 * projectScore +
-    0.10 * educationScore +
-    0.10 * responsibilityScore +
+    0.1 * educationScore +
+    0.1 * responsibilityScore +
     0.05 * evidenceQualityScore;
 
   const overallFit = Math.min(98, Math.max(25, Math.round(rawScore)));
@@ -306,7 +362,21 @@ export function analyzeResumeDeterministically(
     target_job_title: jobTitle,
     overall_fit_percentage: overallFit,
     fit_level: fitLevel,
-    executive_summary: `${resolvedName} demonstrates ${overallFit >= 75 ? "strong" : overallFit >= 55 ? "moderate" : "developing"} alignment with the ${jobTitle} position. ${strengths.length > 0 ? `Key verified proficiencies include ${strengths.slice(0, 3).map((s) => s.skill_or_area).join(", ")}.` : ""} ${gaps.length > 0 ? `Identified growth areas to verify: ${gaps.slice(0, 2).map((g) => g.requirement).join(" and ")}.` : "Candidate profile shows comprehensive coverage for primary qualifications."}`,
+    executive_summary: `${resolvedName} demonstrates ${overallFit >= 75 ? "strong" : overallFit >= 55 ? "moderate" : "developing"} alignment with the ${jobTitle} position. ${
+      strengths.length > 0
+        ? `Key verified proficiencies include ${strengths
+            .slice(0, 3)
+            .map((s) => s.skill_or_area)
+            .join(", ")}.`
+        : ""
+    } ${
+      gaps.length > 0
+        ? `Identified growth areas to verify: ${gaps
+            .slice(0, 2)
+            .map((g) => g.requirement)
+            .join(" and ")}.`
+        : "Candidate profile shows comprehensive coverage for primary qualifications."
+    }`,
     score_breakdown: {
       skills_score: skillsScore,
       experience_score: expScore,
@@ -327,7 +397,9 @@ export function analyzeResumeDeterministically(
 /**
  * Perform AI resume analysis via OpenAI or Gemini, with deterministic fallback.
  */
-export async function executeAiResumeAnalysis(input: AnalyzeResumeInput): Promise<ResumeAnalysisResult> {
+export async function executeAiResumeAnalysis(
+  input: AnalyzeResumeInput,
+): Promise<ResumeAnalysisResult> {
   const openAiKey = process.env.OPENAI_API_KEY?.trim();
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
 
@@ -351,7 +423,9 @@ export async function executeAiResumeAnalysis(input: AnalyzeResumeInput): Promis
   // 2. Resolve Candidate Identity from Resume Text
   const detected = extractContactInfo(resumeContent);
   const resolvedName =
-    input.candidateName && input.candidateName !== "Applicant" && input.candidateName !== "Aarav Sharma"
+    input.candidateName &&
+    input.candidateName !== "Applicant" &&
+    input.candidateName !== "Aarav Sharma"
       ? input.candidateName
       : detected.name || input.candidateName || "Candidate";
 
@@ -488,10 +562,7 @@ ${resumeContent.slice(0, 15000)}`;
           body: JSON.stringify({
             contents: [
               {
-                parts: [
-                  { text: systemPrompt },
-                  { text: userPrompt },
-                ],
+                parts: [{ text: systemPrompt }, { text: userPrompt }],
               },
             ],
             generationConfig: {

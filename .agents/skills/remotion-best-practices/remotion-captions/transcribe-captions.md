@@ -83,8 +83,7 @@ const conversion = await Conversion.init({
       sampleRate: WHISPER_WEBGPU_SAMPLE_RATE,
       process: (sample) => {
         const waveform = new Float32Array(
-          sample.allocationSize({ format: "f32", planeIndex: 0 }) /
-            Float32Array.BYTES_PER_ELEMENT,
+          sample.allocationSize({ format: "f32", planeIndex: 0 }) / Float32Array.BYTES_PER_ELEMENT,
         );
         sample.copyTo(waveform, { format: "f32", planeIndex: 0 });
         chunks.push({

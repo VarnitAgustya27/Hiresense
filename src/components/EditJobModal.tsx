@@ -22,7 +22,10 @@ export function EditJobModal({ job, isOpen, onClose, onSuccess }: EditJobModalPr
     title: job.title || initialStructured.title || "",
     company: job.company_name || initialStructured.company || "",
     location: job.location || initialStructured.location || null,
-    work_mode: (job.work_mode as any) || initialStructured.work_mode || null,
+    work_mode:
+      (job.work_mode as "remote" | "hybrid" | "onsite" | null) ||
+      initialStructured.work_mode ||
+      null,
     employment_type: job.job_type || initialStructured.employment_type || null,
     experience: job.experience || initialStructured.experience || null,
     salary: initialStructured.salary || {
@@ -39,7 +42,9 @@ export function EditJobModal({ job, isOpen, onClose, onSuccess }: EditJobModalPr
     benefits: initialStructured.benefits || [],
   });
 
-  const [status, setStatus] = useState<"draft" | "published">((job.status as any) || "published");
+  const [status, setStatus] = useState<"draft" | "published">(
+    job.status === "draft" ? "draft" : "published",
+  );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -70,7 +75,7 @@ export function EditJobModal({ job, isOpen, onClose, onSuccess }: EditJobModalPr
         salary_currency: structured.salary?.currency || "INR",
         salary_period: structured.salary?.period || "month",
         salary_display: structured.salary?.display || "Not specified",
-        generated_posting: structured as any,
+        generated_posting: structured as unknown as Record<string, unknown>,
         status,
       };
 
@@ -85,9 +90,10 @@ export function EditJobModal({ job, isOpen, onClose, onSuccess }: EditJobModalPr
 
       onSuccess(data as Job);
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Update job error:", err);
-      setSaveError(err?.message || "Failed to update listing.");
+      const msg = err instanceof Error ? err.message : "Failed to update listing.";
+      setSaveError(msg);
     } finally {
       setSaving(false);
     }
@@ -257,7 +263,7 @@ export function EditJobModal({ job, isOpen, onClose, onSuccess }: EditJobModalPr
                 onChange={(e) =>
                   setStructured({
                     ...structured,
-                    work_mode: (e.target.value as any) || null,
+                    work_mode: (e.target.value as "remote" | "hybrid" | "onsite") || null,
                   })
                 }
                 className="w-full h-10 px-3 rounded-[16px] bg-[#1f1f1f] text-[#f5f5f5] text-[13px] focus:outline-none focus:ring-2 focus:ring-[#f5f5f5]"
@@ -320,7 +326,7 @@ export function EditJobModal({ job, isOpen, onClose, onSuccess }: EditJobModalPr
               <label className="text-[12px] font-[600] text-[#8a8a8a]">Status</label>
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
+                onChange={(e) => setStatus(e.target.value as "draft" | "published")}
                 className="w-full h-10 px-3.5 rounded-[16px] bg-[#1f1f1f] text-[#f5f5f5] text-[14px] focus:outline-none focus:ring-2 focus:ring-[#f5f5f5]"
               >
                 <option value="draft">Draft (hidden from students)</option>
@@ -490,7 +496,11 @@ export function EditJobModal({ job, isOpen, onClose, onSuccess }: EditJobModalPr
               />
               <select
                 value={newTechReqType}
-                onChange={(e) => setNewTechReqType(e.target.value as any)}
+                onChange={(e) =>
+                  setNewTechReqType(
+                    e.target.value as "mandatory" | "preferred" | "contextual" | "informational",
+                  )
+                }
                 className="h-9 px-3 rounded-[16px] bg-[#1f1f1f] text-[#f5f5f5] text-[12px] focus:outline-none focus:ring-2 focus:ring-[#f5f5f5]"
               >
                 <option value="mandatory">Mandatory</option>

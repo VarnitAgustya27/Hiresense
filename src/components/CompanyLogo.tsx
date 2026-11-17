@@ -94,14 +94,9 @@ export function CompanyLogo({
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center rounded-[4px] bg-[#141414] text-[#f5f5f5] font-[650]">
-          {initials.length <= 2 ? (
-            initials
-          ) : (
-            <Briefcase size={16} className="text-[#8a8a8a]" />
-          )}
+          {initials.length <= 2 ? initials : <Briefcase size={16} className="text-[#8a8a8a]" />}
         </div>
       )}
     </div>
   );
 }
-

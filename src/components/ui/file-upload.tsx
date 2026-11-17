@@ -65,7 +65,7 @@ export const FileUpload = ({
     if (!newFiles.length) return;
     const updated = multiple ? [...files, ...newFiles] : [newFiles[0]];
     setFiles(updated);
-    onChange && onChange(updated);
+    onChange?.(updated);
   };
 
   const handleRemove = (e: React.MouseEvent, index: number) => {
@@ -74,7 +74,7 @@ export const FileUpload = ({
     const updated = files.filter((_, i) => i !== index);
     setFiles(updated);
     if (onFileRemove && removedFile) onFileRemove(removedFile);
-    onChange && onChange(updated);
+    onChange?.(updated);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }

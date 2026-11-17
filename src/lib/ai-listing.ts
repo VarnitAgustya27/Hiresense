@@ -115,11 +115,12 @@ export async function executeAiStructuring(
 
     const parsed = JSON.parse(stdout.trim()) as GenerateListingResult;
     return parsed;
-  } catch (cliError: any) {
+  } catch (cliError: unknown) {
     console.error("Python AI CLI execution error:", cliError);
+    const err = cliError as { message?: string };
     throw new Error(
       `Failed to structure job listing: ${
-        cliError?.message || "AI structuring engine timed out or encountered an error."
+        err?.message || "AI structuring engine timed out or encountered an error."
       }`,
     );
   }

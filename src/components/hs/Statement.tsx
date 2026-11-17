@@ -35,7 +35,6 @@ function BrandWord({
   return (
     <span
       className="group relative inline-block cursor-pointer select-none mr-[0.35em] align-baseline text-[1.12em] md:text-[1.15em] font-brand font-semibold tracking-[-0.02em]"
-      data-hover="true"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >

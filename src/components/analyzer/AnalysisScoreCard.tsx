@@ -115,7 +115,10 @@ export function AnalysisScoreCard({
           </div>
 
           {categories.map((cat, idx) => (
-            <div key={idx} className="rounded-[16px] bg-[#1a1a1a] p-3 border border-[rgba(255,255,255,0.06)] space-y-1.5">
+            <div
+              key={idx}
+              className="rounded-[16px] bg-[#1a1a1a] p-3 border border-[rgba(255,255,255,0.06)] space-y-1.5"
+            >
               <div className="flex items-center justify-between text-[13px]">
                 <div className="flex items-center gap-2">
                   <span className="font-[600] text-[#f5f5f5]">{cat.label}</span>

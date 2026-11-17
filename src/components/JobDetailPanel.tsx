@@ -8,20 +8,25 @@ import {
   GraduationCap,
   Sparkles,
   CheckCircle2,
-  HelpCircle,
   Bookmark,
   Share2,
   Edit3,
-  Globe,
-  ShieldCheck,
 } from "lucide-react";
 import type { Job, StructuredJobListing } from "@/types/database.types";
 import { TechLogoTile } from "./TechLogoTile";
 import { CompanyLogo } from "./CompanyLogo";
+import {
+  type ApplicationRecord,
+  getApplicationCtaLabel,
+  getApplicationProgressTracker,
+} from "@/lib/applications";
 
 interface JobDetailPanelProps {
   job: Job;
   isRecruiter?: boolean;
+  application?: ApplicationRecord | null;
+  isBookmarked?: boolean;
+  onToggleBookmark?: (jobId: string) => void;
   onEdit?: (job: Job) => void;
   onToggleStatus?: (job: Job) => void;
   onDelete?: (job: Job) => void;
@@ -30,11 +35,16 @@ interface JobDetailPanelProps {
 export function JobDetailPanel({
   job,
   isRecruiter = false,
+  application = null,
+  isBookmarked: externalBookmarked,
+  onToggleBookmark,
   onEdit,
   onToggleStatus,
   onDelete,
 }: JobDetailPanelProps) {
-  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [internalBookmarked, setInternalBookmarked] = useState(false);
+  const isBookmarked = externalBookmarked !== undefined ? externalBookmarked : internalBookmarked;
+
   const [copied, setCopied] = useState(false);
 
   // Parse structured data safely
@@ -54,7 +64,17 @@ export function JobDetailPanel({
     }
   };
 
+  const handleBookmarkClick = () => {
+    if (onToggleBookmark) {
+      onToggleBookmark(job.id);
+    } else {
+      setInternalBookmarked(!internalBookmarked);
+    }
+  };
+
   const isDraft = job.status === "draft";
+  const ctaLabel = getApplicationCtaLabel(application);
+  const tracker = getApplicationProgressTracker(application);
 
   return (
     <div className="rounded-[24px] bg-[#141414] border border-[rgba(255,255,255,0.10)] p-6 sm:p-8 text-left space-y-8 overflow-y-auto">
@@ -97,7 +117,7 @@ export function JobDetailPanel({
             </button>
             <button
               type="button"
-              onClick={() => setIsBookmarked(!isBookmarked)}
+              onClick={handleBookmarkClick}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#1a1a1a] text-[#8a8a8a] hover:text-[#f5f5f5] hover:bg-[#262626] transition-colors"
               title={isBookmarked ? "Saved" : "Save job"}
             >
@@ -123,6 +143,44 @@ export function JobDetailPanel({
           <span className="font-[600] text-[#f5f5f5]">{salaryDisplay}</span>
         </div>
 
+        {/* Student Progress Tracker & Context-Aware CTA */}
+        {!isRecruiter && (
+          <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.08)] p-4 space-y-2.5">
+            {/* Step Dots: Applied · Resume · Interview · Results */}
+            <div className="flex items-center gap-2 text-[12px] font-[600] flex-wrap">
+              {tracker.steps.map((step, idx) => (
+                <div key={step.label} className="flex items-center gap-1.5">
+                  {idx > 0 && <span className="text-[#5c5c5c] mx-1">·</span>}
+                  {step.state === "done" ? (
+                    <span
+                      aria-label="Completed"
+                      className="inline-block h-2 w-2 rounded-full bg-[#f5f5f5] shrink-0"
+                    />
+                  ) : step.state === "current" ? (
+                    <span
+                      aria-label="In progress"
+                      className="relative inline-flex h-2.5 w-2.5 rounded-full border border-[#f5f5f5] shrink-0 overflow-hidden"
+                    >
+                      <span className="absolute left-0 top-0 bottom-0 w-1/2 bg-[#f5f5f5]" />
+                    </span>
+                  ) : (
+                    <span
+                      aria-label="Upcoming"
+                      className="inline-block h-2 w-2 rounded-full border border-[#5c5c5c] bg-transparent shrink-0"
+                    />
+                  )}
+                  <span className={step.state === "upcoming" ? "text-[#5c5c5c]" : "text-[#f5f5f5]"}>
+                    {step.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Next Action Text */}
+            <p className="text-[12px] text-[#8a8a8a] leading-relaxed">{tracker.nextActionText}</p>
+          </div>
+        )}
+
         {/* Primary CTA Row */}
         <div className="pt-2 flex items-center gap-3 flex-wrap">
           {!isRecruiter ? (
@@ -131,7 +189,7 @@ export function JobDetailPanel({
               params={{ jobId: job.id }}
               className="inline-flex h-11 items-center justify-center rounded-full bg-[#f5f5f5] px-8 text-[15px] font-[600] text-[#0a0a0a] transition-all hover:bg-[#e0e0e0] active:scale-[0.98]"
             >
-              Apply now
+              {ctaLabel}
             </Link>
           ) : (
             <div className="flex items-center gap-2 flex-wrap">
@@ -178,121 +236,41 @@ export function JobDetailPanel({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.06)] p-3.5">
             <span className="text-[12px] font-[450] text-[#707070] block">Employment type</span>
-            <span className="text-[14px] font-[600] text-[#f5f5f5] mt-0.5 block">
+            <span className="text-[14px] font-[600] text-[#f5f5f5] capitalize">
               {employmentType}
             </span>
           </div>
 
           <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.06)] p-3.5">
-            <span className="text-[12px] font-[450] text-[#707070] block">
-              Work mode & Location
-            </span>
-            <span className="text-[14px] font-[600] text-[#f5f5f5] mt-0.5 block capitalize">
-              {workMode} {location !== "Not specified" ? `(${location})` : ""}
-            </span>
-          </div>
-
-          <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.06)] p-3.5">
-            <span className="text-[12px] font-[450] text-[#707070] block">Compensation</span>
-            <span className="text-[14px] font-[600] text-[#f5f5f5] mt-0.5 block">
-              {salaryDisplay}
-            </span>
-          </div>
-
-          <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.06)] p-3.5">
             <span className="text-[12px] font-[450] text-[#707070] block">Experience</span>
-            <span className="text-[14px] font-[600] text-[#f5f5f5] mt-0.5 block">{experience}</span>
+            <span className="text-[14px] font-[600] text-[#f5f5f5]">{experience}</span>
+          </div>
+
+          <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.06)] p-3.5">
+            <span className="text-[12px] font-[450] text-[#707070] block">Location</span>
+            <span className="text-[14px] font-[600] text-[#f5f5f5]">{location}</span>
+          </div>
+
+          <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.06)] p-3.5">
+            <span className="text-[12px] font-[450] text-[#707070] block">Work mode</span>
+            <span className="text-[14px] font-[600] text-[#f5f5f5] capitalize">{workMode}</span>
           </div>
         </div>
       </div>
 
-      {/* Section 2: About the Role */}
+      {/* Section 2: About the role */}
       {structured.about_role && (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           <h4 className="text-[16px] font-[650] text-[#f5f5f5] tracking-tight">About the role.</h4>
-          <p className="text-[15px] font-[450] leading-relaxed text-[#9a9a9a]">
-            {structured.about_role}
-          </p>
+          <p className="text-[14px] leading-relaxed text-[#8a8a8a]">{structured.about_role}</p>
         </div>
       )}
 
-      {/* Section 3: Key Responsibilities */}
-      {structured.responsibilities && structured.responsibilities.length > 0 && (
-        <div className="space-y-3">
-          <h4 className="text-[16px] font-[650] text-[#f5f5f5] tracking-tight">
-            Key responsibilities.
-          </h4>
-          <ul className="space-y-2 text-[14px] font-[450] text-[#9a9a9a]">
-            {structured.responsibilities.map((resp, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#f5f5f5] mt-2 shrink-0" />
-                <span className="leading-relaxed">{resp}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Section 4: Qualifications (Mandatory vs Preferred) */}
-      {structured.qualifications &&
-        (structured.qualifications.mandatory?.length > 0 ||
-          structured.qualifications.preferred?.length > 0) && (
-          <div className="space-y-4">
-            <h4 className="text-[16px] font-[650] text-[#f5f5f5] tracking-tight">
-              Qualifications & Requirements.
-            </h4>
-
-            {structured.qualifications.mandatory?.length > 0 && (
-              <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.08)] p-4 space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-[#f5f5f5]" />
-                  <span className="text-[13px] font-[650] text-[#f5f5f5]">
-                    Mandatory requirements
-                  </span>
-                </div>
-                <ul className="space-y-1.5 text-[14px] text-[#8a8a8a] pl-5 list-disc">
-                  {structured.qualifications.mandatory.map((q, idx) => (
-                    <li key={idx} className="leading-relaxed">
-                      {q}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {structured.qualifications.preferred?.length > 0 && (
-              <div className="rounded-[16px] bg-[#141414] border border-[rgba(255,255,255,0.06)] p-4 space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={15} className="text-[#8a8a8a]" />
-                  <span className="text-[13px] font-[600] text-[#8a8a8a]">
-                    Preferred qualifications
-                  </span>
-                </div>
-                <ul className="space-y-1.5 text-[14px] text-[#707070] pl-5 list-disc">
-                  {structured.qualifications.preferred.map((q, idx) => (
-                    <li key={idx} className="leading-relaxed">
-                      {q}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-      {/* Section 5: Tech Stack with Devicon Logos */}
+      {/* Section 3: Tech Stack & Devicon Tiles */}
       {structured.tech_stack && structured.tech_stack.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-[16px] font-[650] text-[#f5f5f5] tracking-tight">
-              Tech stack & Skills.
-            </h4>
-            <span className="text-[12px] font-[450] text-[#707070]">
-              {structured.tech_stack.length} technologies
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <h4 className="text-[16px] font-[650] text-[#f5f5f5] tracking-tight">Tech stack.</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {structured.tech_stack.map((item, idx) => (
               <TechLogoTile key={idx} item={item} />
             ))}
@@ -300,37 +278,86 @@ export function JobDetailPanel({
         </div>
       )}
 
-      {/* Section 6: Benefits */}
-      {structured.benefits && structured.benefits.length > 0 && (
+      {/* Section 4: Mandatory & Preferred Qualifications */}
+      {structured.qualifications && (
+        <div className="space-y-4">
+          <h4 className="text-[16px] font-[650] text-[#f5f5f5] tracking-tight">Qualifications.</h4>
+
+          {structured.qualifications.mandatory &&
+            structured.qualifications.mandatory.length > 0 && (
+              <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.06)] p-4 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+                  <span className="text-[13px] font-[650] text-[#f5f5f5]">
+                    Mandatory requirements
+                  </span>
+                </div>
+                <ul className="space-y-2 text-[13px] text-[#8a8a8a] pl-2">
+                  {structured.qualifications.mandatory.map((q, idx) => (
+                    <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                      <span className="text-[#5c5c5c] shrink-0 mt-0.5">•</span>
+                      <span>{q}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+          {structured.qualifications.preferred &&
+            structured.qualifications.preferred.length > 0 && (
+              <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.06)] p-4 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-[#60a5fa]" />
+                  <span className="text-[13px] font-[650] text-[#f5f5f5]">
+                    Preferred qualifications
+                  </span>
+                </div>
+                <ul className="space-y-2 text-[13px] text-[#8a8a8a] pl-2">
+                  {structured.qualifications.preferred.map((q, idx) => (
+                    <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                      <span className="text-[#5c5c5c] shrink-0 mt-0.5">•</span>
+                      <span>{q}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+        </div>
+      )}
+
+      {/* Section 5: Key Responsibilities */}
+      {structured.responsibilities && structured.responsibilities.length > 0 && (
         <div className="space-y-3">
           <h4 className="text-[16px] font-[650] text-[#f5f5f5] tracking-tight">
-            Perks & Benefits.
+            Key responsibilities.
           </h4>
-          <ul className="space-y-2 text-[14px] font-[450] text-[#9a9a9a]">
-            {structured.benefits.map((benefit, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#8a8a8a] mt-2 shrink-0" />
-                <span className="leading-relaxed">{benefit}</span>
+          <ul className="space-y-2 text-[13px] text-[#8a8a8a]">
+            {structured.responsibilities.map((r, idx) => (
+              <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                <CheckCircle2 size={14} className="text-[#5c5c5c] shrink-0 mt-0.5" />
+                <span>{r}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {/* Section 7: Audit Trail & Integrity Note */}
-      <div className="pt-6 border-t border-[rgba(255,255,255,0.06)] flex items-center justify-between gap-4 text-[12px] font-[450] text-[#5c5c5c] flex-wrap">
-        <div className="flex items-center gap-2">
-          <ShieldCheck size={14} className="text-[#8a8a8a]" />
-          <span>Human in the loop · Recruiter verified</span>
+      {/* Section 6: Benefits & Perks */}
+      {structured.benefits && structured.benefits.length > 0 && (
+        <div className="space-y-3">
+          <h4 className="text-[16px] font-[650] text-[#f5f5f5] tracking-tight">
+            Benefits & perks.
+          </h4>
+          <ul className="space-y-2 text-[13px] text-[#8a8a8a]">
+            {structured.benefits.map((b, idx) => (
+              <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                <Sparkles size={14} className="text-[#60a5fa] shrink-0 mt-0.5" />
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
         </div>
-
-        {job.model_name && (
-          <div className="flex items-center gap-2 font-mono text-[11px]">
-            <span>Model: {job.model_name}</span>
-            {job.prompt_version && <span>· {job.prompt_version}</span>}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

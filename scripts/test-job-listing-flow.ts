@@ -58,7 +58,9 @@ async function run() {
   console.log("  Structured salary display:", aiResult.structured.salary.display);
   console.log("  Extracted tech stack count:", aiResult.structured.tech_stack.length);
   aiResult.structured.tech_stack.forEach((t) => {
-    console.log(`    - ${t.canonical_name} (${t.category}) | devicon: ${t.devicon_slug} | req: ${t.requirement_type}`);
+    console.log(
+      `    - ${t.canonical_name} (${t.category}) | devicon: ${t.devicon_slug} | req: ${t.requirement_type}`,
+    );
   });
 
   // 4. Save as Draft by Recruiter
@@ -148,7 +150,10 @@ async function run() {
     .update({ title: "Hacked Title" })
     .eq("id", jobId);
 
-  console.log("  Update attempt as student error:", studentTamperErr?.message || "No error returned (rows modified = 0)");
+  console.log(
+    "  Update attempt as student error:",
+    studentTamperErr?.message || "No error returned (rows modified = 0)",
+  );
   // Verify title was not changed
   const { data: verifyUntampered } = await recruiterClient
     .from("jobs")

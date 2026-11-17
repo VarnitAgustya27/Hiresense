@@ -37,9 +37,7 @@ import { HtmlInCanvas } from "remotion";
 export const MyComp = () => {
   return (
     <HtmlInCanvas width={1280} height={720}>
-      <div style={{ fontSize: 80 }}>
-        Hello
-      </div>
+      <div style={{ fontSize: 80 }}>Hello</div>
     </HtmlInCanvas>
   );
 };
@@ -86,9 +84,7 @@ export const Blur = () => {
           fontSize: 120,
         }}
       >
-        <h1>
-          Hello
-        </h1>
+        <h1>Hello</h1>
       </AbsoluteFill>
     </HtmlInCanvas>
   );

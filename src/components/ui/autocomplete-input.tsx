@@ -42,10 +42,7 @@ export function AutocompleteInput({
   // Close on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
         setHighlightIndex(-1);
       }
@@ -75,9 +72,7 @@ export function AutocompleteInput({
       setHighlightIndex((prev) => (prev + 1) % suggestions.length);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlightIndex((prev) =>
-        prev <= 0 ? suggestions.length - 1 : prev - 1
-      );
+      setHighlightIndex((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (highlightIndex >= 0 && highlightIndex < suggestions.length) {
@@ -118,8 +113,7 @@ export function AutocompleteInput({
           </div>
           {suggestions.map((item, index) => {
             const isHighlighted = index === highlightIndex;
-            const isExactMatch =
-              item.name.toLowerCase() === value.toLowerCase().trim();
+            const isExactMatch = item.name.toLowerCase() === value.toLowerCase().trim();
 
             return (
               <button
@@ -157,9 +151,7 @@ export function AutocompleteInput({
 
                 {/* Name and Subtitle */}
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-[600] text-[#f5f5f5]">
-                    {item.name}
-                  </div>
+                  <div className="truncate text-[13px] font-[600] text-[#f5f5f5]">{item.name}</div>
                   {item.subtitle && (
                     <div className="truncate text-[11px] font-[450] text-[#8a8a8a]">
                       {item.subtitle}
@@ -167,9 +159,7 @@ export function AutocompleteInput({
                   )}
                 </div>
 
-                {isExactMatch && (
-                  <Check size={14} className="text-[#0066ff] shrink-0" />
-                )}
+                {isExactMatch && <Check size={14} className="text-[#0066ff] shrink-0" />}
               </button>
             );
           })}
@@ -178,4 +168,3 @@ export function AutocompleteInput({
     </div>
   );
 }
-

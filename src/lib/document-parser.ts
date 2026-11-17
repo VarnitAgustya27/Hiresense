@@ -32,8 +32,9 @@ export async function extractTextFromDocument(
     const decoder = new TextDecoder("utf-8");
     const raw = decoder.decode(arrayBuffer);
     // Remove binary control chars if any
+    // eslint-disable-next-line no-control-regex
     return raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim();
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`Document text extraction error for ${fileName}:`, error);
     throw new Error(
       `Could not extract text from "${fileName}". Please ensure the file is not password-protected, or copy & paste your resume text directly into the "Paste text / Edit" tab.`,

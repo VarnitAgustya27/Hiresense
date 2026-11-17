@@ -15,37 +15,30 @@ Supply the canvas `width` and `height`, usually from `useVideoConfig()`.
 Call `useCurrentFrame()` inside the child component so each sample receives its own frame.
 
 ```tsx
-import {
-  HtmlInCanvasMotionBlur,
-} from '@remotion/motion-blur';
-import {useCurrentFrame, useVideoConfig} from 'remotion';
+import { HtmlInCanvasMotionBlur } from "@remotion/motion-blur";
+import { useCurrentFrame, useVideoConfig } from "remotion";
 
 const MovingBox = () => {
   const frame = useCurrentFrame();
   return (
     <div
       style={{
-        position: 'absolute',
+        position: "absolute",
         left: frame * 10,
         top: 200,
         width: 120,
         height: 120,
-        backgroundColor: '#ff6b6b',
+        backgroundColor: "#ff6b6b",
       }}
     />
   );
 };
 
 export const HtmlInCanvasBlur = () => {
-  const {width, height} = useVideoConfig();
+  const { width, height } = useVideoConfig();
 
   return (
-    <HtmlInCanvasMotionBlur
-      width={width}
-      height={height}
-      samples={8}
-      shutterAngle={180}
-    >
+    <HtmlInCanvasMotionBlur width={width} height={height} samples={8} shutterAngle={180}>
       <MovingBox />
     </HtmlInCanvasMotionBlur>
   );

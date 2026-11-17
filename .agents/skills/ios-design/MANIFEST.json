@@ -8,15 +8,8 @@
   },
   "designAuthority": "uizze",
   "evidenceMode": "concrete-need-only",
-  "uizzeGuidance": [
-    "references/uizze-reference-policy.md",
-    "references/uizze-image-to-ui.md"
-  ],
-  "included": [
-    "reference/craft.md",
-    "reference/overdrive.md",
-    "reference/audit.native.md"
-  ],
+  "uizzeGuidance": ["references/uizze-reference-policy.md", "references/uizze-image-to-ui.md"],
+  "included": ["reference/craft.md", "reference/overdrive.md", "reference/audit.native.md"],
   "origins": [
     {
       "path": "reference/craft.md",

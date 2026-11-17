@@ -148,9 +148,7 @@ function StudentProfilePage() {
     setFormError(null);
   };
 
-  const isOwner = Boolean(
-    currentUser && targetProfile && currentUser.id === targetProfile.id
-  );
+  const isOwner = Boolean(currentUser && targetProfile && currentUser.id === targetProfile.id);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -313,9 +311,12 @@ function StudentProfilePage() {
           <div className="h-16 w-16 rounded-[30%] bg-[#141414] border border-[rgba(255,255,255,0.10)] flex items-center justify-center mb-4 text-[#8a8a8a]">
             <User size={28} />
           </div>
-          <h1 className="text-[28px] font-[650] text-[#f5f5f5] tracking-tight">Student not found.</h1>
+          <h1 className="text-[28px] font-[650] text-[#f5f5f5] tracking-tight">
+            Student not found.
+          </h1>
           <p className="mt-2 text-[14px] text-[#8a8a8a] leading-relaxed">
-            No profile exists with the username <span className="text-[#f5f5f5]">@{username}</span> on HireSense.
+            No profile exists with the username <span className="text-[#f5f5f5]">@{username}</span>{" "}
+            on HireSense.
           </p>
           <div className="mt-6 flex items-center gap-3">
             <Link
@@ -334,7 +335,7 @@ function StudentProfilePage() {
     targetProfile.github_url ||
     targetProfile.linkedin_url ||
     targetProfile.twitter_url ||
-    targetProfile.leetcode_url
+    targetProfile.leetcode_url,
   );
 
   return (
@@ -432,9 +433,7 @@ function StudentProfilePage() {
                     )}
                   </div>
 
-                  <p className="text-[14px] font-[600] text-[#8a8a8a]">
-                    @{targetProfile.username}
-                  </p>
+                  <p className="text-[14px] font-[600] text-[#8a8a8a]">@{targetProfile.username}</p>
 
                   <p className="text-[13px] font-[450] text-[#707070]">
                     {targetProfile.is_hired && targetProfile.hired_company
@@ -452,7 +451,11 @@ function StudentProfilePage() {
                   className="inline-flex h-10 items-center gap-1.5 rounded-full bg-[#1a1a1a] px-4 text-[13px] font-[600] text-[#8a8a8a] border border-[rgba(255,255,255,0.08)] transition-colors hover:text-[#f5f5f5]"
                   title="Copy profile link"
                 >
-                  {copiedLink ? <CheckCheck size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                  {copiedLink ? (
+                    <CheckCheck size={14} className="text-emerald-400" />
+                  ) : (
+                    <Copy size={14} />
+                  )}
                   <span>{copiedLink ? "Copied" : "Share"}</span>
                 </button>
 
@@ -478,7 +481,8 @@ function StudentProfilePage() {
                     Edit profile.
                   </h2>
                   <p className="text-[13px] text-[#8a8a8a]">
-                    Update your candidate identity, education, employment status, and developer links.
+                    Update your candidate identity, education, employment status, and developer
+                    links.
                   </p>
                 </div>
               </div>
@@ -492,9 +496,7 @@ function StudentProfilePage() {
 
               {/* Exact Same Profile Image Picker as used in Signup */}
               <div className="space-y-2">
-                <label className="block text-[12px] font-[600] text-[#8a8a8a]">
-                  Profile photo
-                </label>
+                <label className="block text-[12px] font-[600] text-[#8a8a8a]">Profile photo</label>
                 <AvatarUpload
                   value={selectedFile}
                   onFileSelect={setSelectedFile}
@@ -514,7 +516,10 @@ function StudentProfilePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Full Name */}
                   <div className="space-y-1.5">
-                    <label htmlFor="formFullName" className="block text-[12px] font-[600] text-[#8a8a8a]">
+                    <label
+                      htmlFor="formFullName"
+                      className="block text-[12px] font-[600] text-[#8a8a8a]"
+                    >
                       Full name <span className="text-red-400">*</span>
                     </label>
                     <input
@@ -530,7 +535,10 @@ function StudentProfilePage() {
 
                   {/* Age */}
                   <div className="space-y-1.5">
-                    <label htmlFor="formAge" className="block text-[12px] font-[600] text-[#8a8a8a]">
+                    <label
+                      htmlFor="formAge"
+                      className="block text-[12px] font-[600] text-[#8a8a8a]"
+                    >
                       Age
                     </label>
                     <input
@@ -555,7 +563,10 @@ function StudentProfilePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {/* University */}
                   <div className="space-y-1.5 sm:col-span-1">
-                    <label htmlFor="formUniversity" className="block text-[12px] font-[600] text-[#8a8a8a]">
+                    <label
+                      htmlFor="formUniversity"
+                      className="block text-[12px] font-[600] text-[#8a8a8a]"
+                    >
                       University
                     </label>
                     <AutocompleteInput
@@ -576,7 +587,10 @@ function StudentProfilePage() {
 
                   {/* College */}
                   <div className="space-y-1.5 sm:col-span-1">
-                    <label htmlFor="formCollege" className="block text-[12px] font-[600] text-[#8a8a8a]">
+                    <label
+                      htmlFor="formCollege"
+                      className="block text-[12px] font-[600] text-[#8a8a8a]"
+                    >
                       College / Campus
                     </label>
                     <input
@@ -591,7 +605,10 @@ function StudentProfilePage() {
 
                   {/* Degree */}
                   <div className="space-y-1.5 sm:col-span-1">
-                    <label htmlFor="formDegree" className="block text-[12px] font-[600] text-[#8a8a8a]">
+                    <label
+                      htmlFor="formDegree"
+                      className="block text-[12px] font-[600] text-[#8a8a8a]"
+                    >
                       Degree / Major
                     </label>
                     <input
@@ -632,7 +649,10 @@ function StudentProfilePage() {
 
                   {formIsHired && (
                     <div className="space-y-1.5 pt-2 border-t border-[rgba(255,255,255,0.06)]">
-                      <label htmlFor="formHiredCompany" className="block text-[12px] font-[600] text-[#8a8a8a]">
+                      <label
+                        htmlFor="formHiredCompany"
+                        className="block text-[12px] font-[600] text-[#8a8a8a]"
+                      >
                         Company name <span className="text-red-400">*</span>
                       </label>
                       <AutocompleteInput
@@ -662,7 +682,10 @@ function StudentProfilePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* GitHub */}
                   <div className="space-y-1.5">
-                    <label htmlFor="formGithub" className="flex items-center gap-2 text-[12px] font-[600] text-[#8a8a8a]">
+                    <label
+                      htmlFor="formGithub"
+                      className="flex items-center gap-2 text-[12px] font-[600] text-[#8a8a8a]"
+                    >
                       <GitHubIcon className="size-3.5 text-[#f5f5f5]" />
                       <span>GitHub (username or URL)</span>
                     </label>
@@ -678,7 +701,10 @@ function StudentProfilePage() {
 
                   {/* LinkedIn */}
                   <div className="space-y-1.5">
-                    <label htmlFor="formLinkedin" className="flex items-center gap-2 text-[12px] font-[600] text-[#8a8a8a]">
+                    <label
+                      htmlFor="formLinkedin"
+                      className="flex items-center gap-2 text-[12px] font-[600] text-[#8a8a8a]"
+                    >
                       <LinkedInIcon className="size-3.5 text-[#0077b5]" />
                       <span>LinkedIn (profile URL or handle)</span>
                     </label>
@@ -694,7 +720,10 @@ function StudentProfilePage() {
 
                   {/* Twitter / X */}
                   <div className="space-y-1.5">
-                    <label htmlFor="formTwitter" className="flex items-center gap-2 text-[12px] font-[600] text-[#8a8a8a]">
+                    <label
+                      htmlFor="formTwitter"
+                      className="flex items-center gap-2 text-[12px] font-[600] text-[#8a8a8a]"
+                    >
                       <TwitterIcon className="size-3.5 text-[#f5f5f5]" />
                       <span>Twitter / X (handle or URL)</span>
                     </label>
@@ -710,7 +739,10 @@ function StudentProfilePage() {
 
                   {/* LeetCode */}
                   <div className="space-y-1.5">
-                    <label htmlFor="formLeetcode" className="flex items-center gap-2 text-[12px] font-[600] text-[#8a8a8a]">
+                    <label
+                      htmlFor="formLeetcode"
+                      className="flex items-center gap-2 text-[12px] font-[600] text-[#8a8a8a]"
+                    >
                       <LeetCodeIcon className="size-3.5 text-[#ffa116]" />
                       <span>LeetCode (handle or URL)</span>
                     </label>
@@ -790,12 +822,17 @@ function StudentProfilePage() {
                       <GitHubIcon className="size-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider">GitHub</p>
+                      <p className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider">
+                        GitHub
+                      </p>
                       <p className="text-[13px] font-[600] text-[#f5f5f5] truncate">
                         {cleanDisplayUrl(targetProfile.github_url).replace("github.com/", "")}
                       </p>
                     </div>
-                    <ExternalLink size={13} className="text-[#5c5c5c] group-hover:text-[#f5f5f5] shrink-0" />
+                    <ExternalLink
+                      size={13}
+                      className="text-[#5c5c5c] group-hover:text-[#f5f5f5] shrink-0"
+                    />
                   </a>
                 )}
 
@@ -810,12 +847,20 @@ function StudentProfilePage() {
                       <LinkedInIcon className="size-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider">LinkedIn</p>
+                      <p className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider">
+                        LinkedIn
+                      </p>
                       <p className="text-[13px] font-[600] text-[#f5f5f5] truncate">
-                        {cleanDisplayUrl(targetProfile.linkedin_url).replace("linkedin.com/in/", "")}
+                        {cleanDisplayUrl(targetProfile.linkedin_url).replace(
+                          "linkedin.com/in/",
+                          "",
+                        )}
                       </p>
                     </div>
-                    <ExternalLink size={13} className="text-[#5c5c5c] group-hover:text-[#f5f5f5] shrink-0" />
+                    <ExternalLink
+                      size={13}
+                      className="text-[#5c5c5c] group-hover:text-[#f5f5f5] shrink-0"
+                    />
                   </a>
                 )}
 
@@ -830,12 +875,20 @@ function StudentProfilePage() {
                       <TwitterIcon className="size-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider">X / Twitter</p>
+                      <p className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider">
+                        X / Twitter
+                      </p>
                       <p className="text-[13px] font-[600] text-[#f5f5f5] truncate">
-                        @{cleanDisplayUrl(targetProfile.twitter_url).replace("x.com/", "").replace("twitter.com/", "")}
+                        @
+                        {cleanDisplayUrl(targetProfile.twitter_url)
+                          .replace("x.com/", "")
+                          .replace("twitter.com/", "")}
                       </p>
                     </div>
-                    <ExternalLink size={13} className="text-[#5c5c5c] group-hover:text-[#f5f5f5] shrink-0" />
+                    <ExternalLink
+                      size={13}
+                      className="text-[#5c5c5c] group-hover:text-[#f5f5f5] shrink-0"
+                    />
                   </a>
                 )}
 
@@ -850,12 +903,19 @@ function StudentProfilePage() {
                       <LeetCodeIcon className="size-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider">LeetCode</p>
+                      <p className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider">
+                        LeetCode
+                      </p>
                       <p className="text-[13px] font-[600] text-[#f5f5f5] truncate">
-                        {cleanDisplayUrl(targetProfile.leetcode_url).replace("leetcode.com/u/", "").replace("leetcode.com/", "")}
+                        {cleanDisplayUrl(targetProfile.leetcode_url)
+                          .replace("leetcode.com/u/", "")
+                          .replace("leetcode.com/", "")}
                       </p>
                     </div>
-                    <ExternalLink size={13} className="text-[#5c5c5c] group-hover:text-[#f5f5f5] shrink-0" />
+                    <ExternalLink
+                      size={13}
+                      className="text-[#5c5c5c] group-hover:text-[#f5f5f5] shrink-0"
+                    />
                   </a>
                 )}
               </div>
@@ -894,9 +954,7 @@ function StudentProfilePage() {
                   </h3>
 
                   {targetProfile.degree && (
-                    <p className="text-[15px] font-[500] text-[#f5f5f5]">
-                      {targetProfile.degree}
-                    </p>
+                    <p className="text-[15px] font-[500] text-[#f5f5f5]">{targetProfile.degree}</p>
                   )}
 
                   {targetProfile.college && (
@@ -1004,7 +1062,11 @@ function StudentProfilePage() {
                 onClick={handleCopyLink}
                 className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#141414] px-3.5 text-[12px] font-[600] text-[#8a8a8a] border border-[rgba(255,255,255,0.08)] transition-colors hover:text-[#f5f5f5] self-start sm:self-auto"
               >
-                {copiedLink ? <CheckCheck size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                {copiedLink ? (
+                  <CheckCheck size={13} className="text-emerald-400" />
+                ) : (
+                  <Copy size={13} />
+                )}
                 <span>{copiedLink ? "Link copied" : "Copy link"}</span>
               </button>
             </div>
@@ -1015,8 +1077,9 @@ function StudentProfilePage() {
         <div className="rounded-[20px] bg-[#141414]/50 border border-[rgba(255,255,255,0.06)] p-5 text-left space-y-1.5">
           <p className="text-[13px] font-[600] text-[#f5f5f5]">Auditable evidence basis.</p>
           <p className="text-[12px] font-[450] text-[#8a8a8a] leading-relaxed">
-            Candidate academic records and resume spans are evaluated strictly against verified role criteria.
-            Proctoring events are observable telemetry signals, never psychological judgments. People make every decision.
+            Candidate academic records and resume spans are evaluated strictly against verified role
+            criteria. Proctoring events are observable telemetry signals, never psychological
+            judgments. People make every decision.
           </p>
         </div>
       </main>

@@ -46,7 +46,7 @@ import { useCurrentFrame, useVideoConfig, Easing, interpolate, Interactive } fro
 
 export const FadeIn = () => {
   const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
+  const { fps } = useVideoConfig();
 
   return (
     <Interactive.Div
@@ -118,12 +118,9 @@ export const MyComposition = () => {
     <>
       <Video src={staticFile("video.mp4")} style={{ opacity: 0.5 }} />
       <Audio src={staticFile("audio.mp3")} />
-      <CanvasImage
-        src={staticFile("logo.png")}
-        style={{ width: 100, height: 100 }}
-      />
+      <CanvasImage src={staticFile("logo.png")} style={{ width: 100, height: 100 }} />
       <Video src="https://remotion.media/video.mp4" />
-      <AnimatedImage src={staticFile('nyancat.gif')} />
+      <AnimatedImage src={staticFile("nyancat.gif")} />
     </>
   );
 };

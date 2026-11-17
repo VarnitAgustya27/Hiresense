@@ -73,8 +73,7 @@ export interface ProfileMenuItem {
   onSelect?: (() => void) | undefined;
 }
 
-export interface ProfileDropdownProps
-  extends Omit<HTMLAttributes<HTMLDivElement>, "onChange"> {
+export interface ProfileDropdownProps extends Omit<HTMLAttributes<HTMLDivElement>, "onChange"> {
   accounts?: Account[] | undefined;
   defaultAccountId?: string | undefined;
   onAccountChange?: ((account: Account) => void) | undefined;
@@ -149,14 +148,7 @@ const INDICATOR_SPRING: Transition = {
 };
 const INSTANT: Transition = { duration: 0 };
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
-const NAV_KEYS = new Set([
-  "ArrowDown",
-  "ArrowUp",
-  "ArrowLeft",
-  "ArrowRight",
-  "Home",
-  "End",
-]);
+const NAV_KEYS = new Set(["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"]);
 
 const ITEM_CLASS =
   "flex w-full cursor-default items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-sm text-zinc-700 outline-none transition-colors duration-100 focus:bg-zinc-100 focus:text-zinc-950 dark:text-zinc-300 dark:focus:bg-zinc-800 dark:focus:text-zinc-50";
@@ -203,17 +195,14 @@ function rowTarget(items: HTMLElement[], current: HTMLElement, step: number) {
   const index = rows.indexOf(current.dataset.row);
   const next = rows[(index + step + rows.length) % rows.length];
   const candidates = items.filter((item) => item.dataset.row === next);
-  return (
-    candidates.find((item) => item.getAttribute("aria-checked") === "true") ??
-    candidates[0]
-  );
+  return candidates.find((item) => item.getAttribute("aria-checked") === "true") ?? candidates[0];
 }
 
 /** Where arrow keys move focus: rows go up and down, radios left and right. */
 function nextTarget(
   items: HTMLElement[],
   active: Element | null,
-  key: string
+  key: string,
 ): HTMLElement | undefined {
   if (key === "Home") {
     return items[0];
@@ -234,7 +223,7 @@ function nextTarget(
 function useControllable<T>(
   value: T | undefined,
   fallback: T,
-  onChange?: ((next: T) => void) | undefined
+  onChange?: ((next: T) => void) | undefined,
 ) {
   const [local, setLocal] = useState(fallback);
   const set = (next: T) => {
@@ -262,7 +251,7 @@ function Avatar({
       className={cn(
         "relative grid shrink-0 select-none place-items-center rounded-full font-medium text-[11px] tracking-wide",
         AVATAR_TONES[tone % AVATAR_TONES.length],
-        className
+        className,
       )}
     >
       {account.avatar_url ? (
@@ -278,7 +267,7 @@ function Avatar({
         <span
           className={cn(
             "absolute right-0 bottom-0 size-2.5 rounded-full ring-2 ring-white transition-colors duration-200 dark:ring-zinc-900 z-10",
-            dot
+            dot,
           )}
         />
       ) : null}
@@ -313,7 +302,7 @@ function Identity({
     <span
       className={cn(
         "flex min-w-0",
-        stacked ? "flex-col items-start gap-3" : "items-center gap-2.5"
+        stacked ? "flex-col items-start gap-3" : "items-center gap-2.5",
       )}
     >
       <motion.span
@@ -333,7 +322,7 @@ function Identity({
         <motion.span
           className={cn(
             "relative z-20 block truncate font-medium text-sm text-zinc-900 leading-5 dark:text-zinc-100",
-            hidden
+            hidden,
           )}
           key={shared ? "name-shared" : "name-static"}
           layoutId={shared ? `${uid}-name` : undefined}
@@ -344,7 +333,7 @@ function Identity({
         <motion.span
           className={cn(
             "relative z-20 block truncate text-xs text-zinc-500 leading-4 dark:text-zinc-400",
-            hidden
+            hidden,
           )}
           key={shared ? "email-shared" : "email-static"}
           layoutId={shared ? `${uid}-email` : undefined}
@@ -358,9 +347,7 @@ function Identity({
 }
 
 function Separator() {
-  return (
-    <hr className="mx-2.5 my-1.5 h-px border-0 bg-zinc-100 dark:bg-zinc-800" />
-  );
+  return <hr className="mx-2.5 my-1.5 h-px border-0 bg-zinc-100 dark:bg-zinc-800" />;
 }
 
 function HoldSignOut({
@@ -381,7 +368,7 @@ function HoldSignOut({
       window.clearTimeout(timer.current);
       window.clearTimeout(nudgeTimer.current);
     },
-    []
+    [],
   );
 
   const start = (via: Via) => {
@@ -414,9 +401,7 @@ function HoldSignOut({
     <>
       <LogOut className="size-4" />
       <span className="flex-1">Sign out</span>
-      <span className="text-xs opacity-60">
-        {nudge ? "Keep holding" : "Hold"}
-      </span>
+      <span className="text-xs opacity-60">{nudge ? "Keep holding" : "Hold"}</span>
     </>
   );
 
@@ -462,10 +447,7 @@ function HoldSignOut({
         aria-hidden="true"
         className="absolute inset-0 flex items-center gap-2.5 rounded-[10px] bg-zinc-900 px-2.5 text-zinc-50 dark:bg-zinc-100 dark:text-zinc-900"
         style={{
-          clipPath:
-            holding || done
-              ? "inset(0 0 0 0 round 10px)"
-              : "inset(0 100% 0 0 round 10px)",
+          clipPath: holding || done ? "inset(0 0 0 0 round 10px)" : "inset(0 100% 0 0 round 10px)",
           transition: holding
             ? `clip-path ${duration}ms linear`
             : "clip-path 240ms cubic-bezier(0.23, 1, 0.32, 1)",
@@ -509,7 +491,7 @@ function StatusRow({
               <span
                 className={cn(
                   "size-2 rounded-full transition-colors duration-200",
-                  checked ? entry.dot : "bg-zinc-300 dark:bg-zinc-600"
+                  checked ? entry.dot : "bg-zinc-300 dark:bg-zinc-600",
                 )}
               />
               {entry.label}
@@ -584,9 +566,7 @@ function LinkItem({
       <span className="text-zinc-400 dark:text-zinc-500">{item.icon}</span>
       <span className="flex-1">{item.label}</span>
       {item.value ? (
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          {item.value}
-        </span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">{item.value}</span>
       ) : null}
     </>
   );
@@ -639,19 +619,9 @@ export default function ProfileDropdown({
   const [instant, setInstant] = useState(false);
   const [page, setPage] = useState<Page>("main");
   const [openSeq, setOpenSeq] = useState(0);
-  const [accountId, setAccountId] = useState(
-    defaultAccountId ?? accounts[0]?.id
-  );
-  const [theme, setTheme] = useControllable(
-    themeProp,
-    defaultTheme,
-    onThemeChange
-  );
-  const [status, setStatus] = useControllable(
-    statusProp,
-    defaultStatus,
-    onStatusChange
-  );
+  const [accountId, setAccountId] = useState(defaultAccountId ?? accounts[0]?.id);
+  const [theme, setTheme] = useControllable(themeProp, defaultTheme, onThemeChange);
+  const [status, setStatus] = useControllable(statusProp, defaultStatus, onStatusChange);
 
   // Sync theme with document element
   useEffect(() => {
@@ -703,8 +673,7 @@ export default function ProfileDropdown({
   const sharedInPanel = phase === "open";
   const menuId = `${uid}-menu`;
 
-  const pageEl = (target: Page) =>
-    target === "main" ? mainRef.current : accountsRef.current;
+  const pageEl = (target: Page) => (target === "main" ? mainRef.current : accountsRef.current);
 
   const openMenu = (via: Via, focus: "first" | "last" | "menu") => {
     if (phaseRef.current === "open") {
@@ -804,9 +773,7 @@ export default function ProfileDropdown({
     pageFocus.current = null;
     if (intent === "first") {
       const list = menuItems(el);
-      const checked = list.find(
-        (item) => item.getAttribute("aria-checked") === "true"
-      );
+      const checked = list.find((item) => item.getAttribute("aria-checked") === "true");
       (checked ?? list[0])?.focus({ preventScroll: true });
     } else if (intent === "switch") {
       el.querySelector<HTMLElement>("[data-switch]")?.focus({
@@ -889,9 +856,7 @@ export default function ProfileDropdown({
     if (event.pointerType !== "mouse") {
       return;
     }
-    const item = (event.target as HTMLElement).closest<HTMLElement>(
-      "[data-menu-item]"
-    );
+    const item = (event.target as HTMLElement).closest<HTMLElement>("[data-menu-item]");
     if (item && document.activeElement !== item) {
       item.focus({ preventScroll: true });
     }
@@ -899,11 +864,7 @@ export default function ProfileDropdown({
 
   return (
     <div
-      className={cn(
-        "relative isolate inline-block",
-        phase !== "closed" && "z-50",
-        className
-      )}
+      className={cn("relative isolate inline-block", phase !== "closed" && "z-50", className)}
       ref={wrapperRef}
       {...props}
     >
@@ -940,16 +901,13 @@ export default function ProfileDropdown({
           aria-hidden="true"
           className={cn(
             "size-4 shrink-0 text-zinc-400 transition-opacity duration-150 dark:text-zinc-500",
-            phase !== "closed" && "opacity-0"
+            phase !== "closed" && "opacity-0",
           )}
         />
       </button>
 
       {phase === "closed" ? null : (
-        <div
-          className="pointer-events-none absolute top-0 right-0 z-50"
-          style={{ width: PANEL_W }}
-        >
+        <div className="pointer-events-none absolute top-0 right-0 z-50" style={{ width: PANEL_W }}>
           <div
             aria-hidden="true"
             className="absolute inset-0 [filter:drop-shadow(0_12px_24px_rgb(0_0_0/0.08))_drop-shadow(0_2px_4px_rgb(0_0_0/0.04))] dark:[filter:drop-shadow(0_12px_28px_rgb(0_0_0/0.5))]"
@@ -969,14 +927,11 @@ export default function ProfileDropdown({
             onPointerMove={onPanelPointerMove}
             style={{ clipPath: innerClip }}
           >
-            <motion.div
-              className="flex w-max items-start"
-              style={{ transform: pageTransform }}
-            >
+            <motion.div className="flex w-max items-start" style={{ transform: pageTransform }}>
               <div
                 className={cn(
                   "shrink-0 p-1.5 transition-opacity duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                  page !== "main" && "opacity-0"
+                  page !== "main" && "opacity-0",
                 )}
                 inert={page !== "main" ? true : undefined}
                 ref={mainRef}
@@ -1010,20 +965,10 @@ export default function ProfileDropdown({
                   tabIndex={-1}
                 >
                   <StatusRow onChange={setStatus} status={status} />
-                  <ThemeRow
-                    onChange={setTheme}
-                    reduced={reduced}
-                    theme={theme}
-                    uid={uid}
-                  />
+                  <ThemeRow onChange={setTheme} reduced={reduced} theme={theme} uid={uid} />
                   <Separator />
                   {items.map((item, index) => (
-                    <LinkItem
-                      index={index}
-                      item={item}
-                      key={item.label}
-                      onSelect={select}
-                    />
+                    <LinkItem index={index} item={item} key={item.label} onSelect={select} />
                   ))}
                   {accounts.length > 1 ? (
                     <button
@@ -1066,7 +1011,7 @@ export default function ProfileDropdown({
               <div
                 className={cn(
                   "shrink-0 p-1.5 transition-opacity duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                  page !== "accounts" && "opacity-0"
+                  page !== "accounts" && "opacity-0",
                 )}
                 inert={page !== "accounts" ? true : undefined}
                 ref={accountsRef}
@@ -1157,4 +1102,3 @@ export default function ProfileDropdown({
     </div>
   );
 }
-

@@ -42,7 +42,6 @@ function EvidenceWord({
       >
         <span
           className="group relative inline-block cursor-pointer select-none"
-          data-hover="true"
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >

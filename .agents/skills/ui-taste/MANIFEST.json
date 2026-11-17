@@ -8,10 +8,7 @@
   },
   "designAuthority": "uizze",
   "evidenceMode": "concrete-need-only",
-  "uizzeGuidance": [
-    "references/uizze-reference-policy.md",
-    "references/uizze-image-to-ui.md"
-  ],
+  "uizzeGuidance": ["references/uizze-reference-policy.md", "references/uizze-image-to-ui.md"],
   "included": [
     "reference/new-work.md",
     "reference/operate.md",

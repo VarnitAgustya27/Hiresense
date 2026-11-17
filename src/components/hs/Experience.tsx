@@ -3,10 +3,8 @@ import {
   frame,
   cancelFrame,
   motion,
-  useMotionValue,
   useReducedMotion,
   useScroll,
-  useSpring,
 } from "framer-motion";
 import { useEffect, useState } from "react";
 import { EASE } from "./motion";
@@ -87,52 +85,6 @@ export function ScrollProgress() {
       aria-hidden
       className="fixed inset-x-0 top-0 z-[60] h-[2px] origin-left bg-foreground"
       style={{ scaleX: scrollYProgress }}
-    />
-  );
-}
-
-export function Cursor() {
-  const reduce = useReducedMotion();
-  const [enabled, setEnabled] = useState(false);
-  const [hover, setHover] = useState(false);
-  const [hidden, setHidden] = useState(true);
-  const x = useMotionValue(-100);
-  const y = useMotionValue(-100);
-  const sx = useSpring(x, { stiffness: 500, damping: 40 });
-  const sy = useSpring(y, { stiffness: 500, damping: 40 });
-
-  useEffect(() => {
-    if (reduce) return;
-    const mq = window.matchMedia("(pointer: fine)");
-    if (!mq.matches) return;
-    setEnabled(true);
-    document.body.classList.add("has-cursor");
-    const move = (e: PointerEvent) => {
-      x.set(e.clientX);
-      y.set(e.clientY);
-      const t = e.target as Element | null;
-      const onInput = !!t?.closest?.("input, textarea");
-      setHidden(onInput);
-      setHover(!!t?.closest?.("a, button, [data-hover]"));
-    };
-    const leave = () => setHidden(true);
-    window.addEventListener("pointermove", move);
-    document.addEventListener("pointerleave", leave);
-    return () => {
-      document.body.classList.remove("has-cursor");
-      window.removeEventListener("pointermove", move);
-      document.removeEventListener("pointerleave", leave);
-    };
-  }, [reduce, x, y]);
-
-  if (!enabled) return null;
-  return (
-    <motion.div
-      aria-hidden
-      className="pointer-events-none fixed left-0 top-0 z-[70] rounded-full bg-foreground mix-blend-difference"
-      style={{ x: sx, y: sy, translateX: "-50%", translateY: "-50%", width: 56, height: 56 }}
-      animate={{ scale: hover ? 1 : 10 / 56, opacity: hidden ? 0 : 1 }}
-      transition={{ duration: 0.35, ease: EASE }}
     />
   );
 }

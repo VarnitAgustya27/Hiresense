@@ -95,7 +95,11 @@ export function ResumeUploadCard({
     const validExtensions = [".pdf", ".docx", ".txt", ".md"];
     const ext = "." + file.name.split(".").pop()?.toLowerCase();
 
-    if (!validExtensions.includes(ext) && !file.type.includes("pdf") && !file.type.includes("text")) {
+    if (
+      !validExtensions.includes(ext) &&
+      !file.type.includes("pdf") &&
+      !file.type.includes("text")
+    ) {
       setFileError("Please upload a PDF, DOCX, or TXT document.");
       return;
     }
@@ -147,9 +151,13 @@ export function ResumeUploadCard({
           detected.name ? ` · Detected: ${detected.name}` : ""
         }`,
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Resume file extraction failure:", err);
-      setFileError(err?.message || "Failed to parse document text. Please paste your resume text.");
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Failed to parse document text. Please paste your resume text.";
+      setFileError(msg);
     } finally {
       setIsExtracting(false);
     }
@@ -163,7 +171,9 @@ export function ResumeUploadCard({
     setCandidateEmail("aarav.sharma@example.com");
     setUploadedFileName("Aarav_Sharma_Demo_Resume.pdf");
     setResumeText(DEMO_RESUME);
-    setExtractionSuccess('Loaded demo profile "Aarav Sharma" (Senior Frontend & Full Stack Engineer)');
+    setExtractionSuccess(
+      'Loaded demo profile "Aarav Sharma" (Senior Frontend & Full Stack Engineer)',
+    );
     setActiveTab("text");
   };
 
@@ -211,8 +221,8 @@ export function ResumeUploadCard({
             Submit resume for analysis.
           </h2>
           <p className="mt-1 text-[14px] font-[450] text-[#8a8a8a]">
-            Our AI engine extracts skills and computes an evidence-backed compatibility score against{" "}
-            <span className="text-[#f5f5f5] font-[600]">{jobTitle}</span>.
+            Our AI engine extracts skills and computes an evidence-backed compatibility score
+            against <span className="text-[#f5f5f5] font-[600]">{jobTitle}</span>.
           </p>
         </div>
 
@@ -266,7 +276,7 @@ export function ResumeUploadCard({
             </label>
             <select
               value={preferredLanguage}
-              onChange={(e) => setPreferredLanguage(e.target.value as any)}
+              onChange={(e) => setPreferredLanguage(e.target.value as "en" | "hi" | "code_mixed")}
               className="w-full h-10 px-3.5 rounded-[16px] bg-[#1a1a1a] border-0 text-[13px] text-[#f5f5f5] focus:outline-none focus:ring-2 focus:ring-[#f5f5f5]"
             >
               <option value="en">English</option>
@@ -300,7 +310,8 @@ export function ResumeUploadCard({
                     : "text-[#8a8a8a] hover:text-[#f5f5f5]"
                 }`}
               >
-                Paste text / Edit ({resumeText ? `${resumeText.length.toLocaleString()} chars` : "empty"})
+                Paste text / Edit (
+                {resumeText ? `${resumeText.length.toLocaleString()} chars` : "empty"})
               </button>
             </div>
 
@@ -358,7 +369,9 @@ export function ResumeUploadCard({
                 files={uploadedFile ? [uploadedFile] : []}
                 accept={{
                   "application/pdf": [".pdf"],
-                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+                    ".docx",
+                  ],
                   "text/plain": [".txt", ".md"],
                 }}
                 disabled={isExtracting}

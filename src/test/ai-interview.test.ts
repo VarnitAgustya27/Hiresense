@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  generateInterviewQuestions,
-  evaluateInterviewSession,
-} from "@/lib/ai-interview";
+import { generateInterviewQuestions, evaluateInterviewSession } from "@/lib/ai-interview";
 
 describe("AI Interview Engine (Mira Persona)", () => {
   it("generates 5 role-grounded structured interview questions", () => {
@@ -59,7 +56,7 @@ describe("AI Interview Engine (Mira Persona)", () => {
       "Frontend Engineer",
       questions,
       answers,
-      durations
+      durations,
     );
 
     expect(scorecard.candidateName).toBe("Aarav Sharma");
@@ -83,14 +80,20 @@ describe("AI Interview Engine (Mira Persona)", () => {
       q4_scenario: "",
       q5_closing: "",
     };
-    const durations = { q1_intro: 10, q2_technical: 10, q3_architecture: 10, q4_scenario: 10, q5_closing: 10 };
+    const durations = {
+      q1_intro: 10,
+      q2_technical: 10,
+      q3_architecture: 10,
+      q4_scenario: 10,
+      q5_closing: 10,
+    };
 
     const scorecard = evaluateInterviewSession(
       "Test Candidate",
       "Senior Frontend Engineer",
       questions,
       emptyAnswers,
-      durations
+      durations,
     );
 
     expect(scorecard.overallScore).toBe(0);
@@ -99,5 +102,45 @@ describe("AI Interview Engine (Mira Persona)", () => {
     expect(scorecard.categories.problemSolving).toBe(0);
     expect(scorecard.answers[0].metrics.technicalScore).toBe(0);
     expect(scorecard.answers[0].strengths[0]).toContain("No answer recorded");
+  });
+
+  it("assigns near-zero score and honest gaps when candidate provides only greetings or single characters", () => {
+    const questions = generateInterviewQuestions("Senior DBA");
+    const trivialAnswers = {
+      q1_intro: "hello",
+      q2_technical: "",
+      q3_architecture: "s",
+      q4_scenario: "",
+      q5_closing: "s",
+    };
+    const durations = {
+      q1_intro: 15,
+      q2_technical: 5,
+      q3_architecture: 10,
+      q4_scenario: 5,
+      q5_closing: 10,
+    };
+
+    const scorecard = evaluateInterviewSession(
+      "Ayush Tiwari",
+      "Senior DBA",
+      questions,
+      trivialAnswers,
+      durations,
+    );
+
+    expect(scorecard.overallScore).toBeLessThan(20);
+    expect(scorecard.fitVerdict).toBe("Developing Fit");
+    expect(scorecard.categories.technicalAccuracy).toBe(0);
+    expect(scorecard.categories.problemSolving).toBe(0);
+    // Question 1 greeting
+    expect(scorecard.answers[0].metrics.technicalScore).toBe(0);
+    expect(scorecard.answers[0].improvements[0]).toContain("Answer was only a greeting");
+    // Question 3 single character
+    expect(scorecard.answers[2].metrics.technicalScore).toBe(0);
+    expect(scorecard.answers[2].strengths[0]).toContain("No substantive technical content");
+    // Honest takeaways with no false praise
+    expect(scorecard.keyTakeaways[0]).toContain("minimal or non-substantive responses");
+    expect(scorecard.gaps[0]).toContain("Multiple interview phases were skipped");
   });
 });

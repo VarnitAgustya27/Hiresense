@@ -31,7 +31,9 @@ async function runTests() {
 
   console.log("Student signed in, JWT app_metadata:", signInData.user.app_metadata);
   if (signInData.user.app_metadata.role !== "student") {
-    console.error(`FAIL Test 1: Expected JWT role 'student', got '${signInData.user.app_metadata.role}'`);
+    console.error(
+      `FAIL Test 1: Expected JWT role 'student', got '${signInData.user.app_metadata.role}'`,
+    );
     process.exit(1);
   }
 
@@ -60,10 +62,17 @@ async function runTests() {
   const anonClient = createClient<Database>(SUPABASE_URL, ANON_KEY);
 
   // Check username availability RPC (checks case-insensitively)
-  const isAvailableExact = await anonClient.rpc("is_username_available", { p_username: testStudentUsername });
-  const isAvailableUpper = await anonClient.rpc("is_username_available", { p_username: testStudentUsername.toUpperCase() });
+  const isAvailableExact = await anonClient.rpc("is_username_available", {
+    p_username: testStudentUsername,
+  });
+  const isAvailableUpper = await anonClient.rpc("is_username_available", {
+    p_username: testStudentUsername.toUpperCase(),
+  });
   console.log(`Checking is_username_available('${testStudentUsername}'):`, isAvailableExact.data);
-  console.log(`Checking is_username_available('${testStudentUsername.toUpperCase()}'):`, isAvailableUpper.data);
+  console.log(
+    `Checking is_username_available('${testStudentUsername.toUpperCase()}'):`,
+    isAvailableUpper.data,
+  );
 
   if (isAvailableExact.data !== false || isAvailableUpper.data !== false) {
     console.error("FAIL Test 2: Existing username was reported as available!");
@@ -73,9 +82,13 @@ async function runTests() {
 
   // TEST 3: Format validation & role security
   console.log("\n--- TEST 3: RPC format validation & client role injection protection ---");
-  const invalidSpace = await anonClient.rpc("is_username_available", { p_username: "invalid with spaces" });
+  const invalidSpace = await anonClient.rpc("is_username_available", {
+    p_username: "invalid with spaces",
+  });
   const invalidShort = await anonClient.rpc("is_username_available", { p_username: "ab" });
-  const invalidLong = await anonClient.rpc("is_username_available", { p_username: "a_very_long_username_exceeding_twenty_chars" });
+  const invalidLong = await anonClient.rpc("is_username_available", {
+    p_username: "a_very_long_username_exceeding_twenty_chars",
+  });
   console.log("is_username_available('invalid with spaces'):", invalidSpace.data);
   console.log("is_username_available('ab'):", invalidShort.data);
   console.log("is_username_available(>20 chars):", invalidLong.data);
@@ -116,10 +129,11 @@ async function runTests() {
   // TEST 6: Recruiter login works with email/credentials
   console.log("\n--- TEST 6: Recruiter login ---");
   const recruiterClient = createClient<Database>(SUPABASE_URL, ANON_KEY);
-  const { data: recruiterLoginData, error: recruiterLoginErr } = await recruiterClient.auth.signInWithPassword({
-    email: "hiresense_recruiter@recruiters.hiresense.online",
-    password: "Hs_Recruiter!2026_xK9mP2vL",
-  });
+  const { data: recruiterLoginData, error: recruiterLoginErr } =
+    await recruiterClient.auth.signInWithPassword({
+      email: "hiresense_recruiter@recruiters.hiresense.online",
+      password: "Hs_Recruiter!2026_xK9mP2vL",
+    });
   if (recruiterLoginErr || !recruiterLoginData.session) {
     console.error("FAIL Test 6: Recruiter login failed:", recruiterLoginErr);
     process.exit(1);
@@ -139,7 +153,10 @@ async function runTests() {
     .select("*")
     .eq("id", studentUser.id);
 
-  console.log("Recruiter querying student profile returned rows count:", otherProfiles?.length ?? 0);
+  console.log(
+    "Recruiter querying student profile returned rows count:",
+    otherProfiles?.length ?? 0,
+  );
   if (otherProfiles && otherProfiles.length > 0) {
     console.error("FAIL Test 10: Recruiter was able to SELECT student profile!");
     process.exit(1);
@@ -151,7 +168,10 @@ async function runTests() {
     .select("*")
     .eq("id", recruiterLoginData.user.id);
 
-  console.log("Student querying recruiter profile returned rows count:", studentQueryingRecruiter?.length ?? 0);
+  console.log(
+    "Student querying recruiter profile returned rows count:",
+    studentQueryingRecruiter?.length ?? 0,
+  );
   if (studentQueryingRecruiter && studentQueryingRecruiter.length > 0) {
     console.error("FAIL Test 10: Student was able to SELECT recruiter profile!");
     process.exit(1);

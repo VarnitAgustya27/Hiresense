@@ -61,11 +61,7 @@ export const MyComposition: React.FC = () => {
 
   return (
     <TransitionSeries>
-      <TransitionSeries.Sequence
-        name="Opening"
-        trimBefore={4 * fps}
-        durationInFrames={20 * fps}
-      >
+      <TransitionSeries.Sequence name="Opening" trimBefore={4 * fps} durationInFrames={20 * fps}>
         <Video
           name="Opening footage"
           src={staticFile("opening.mp4")}
@@ -98,11 +94,7 @@ export const MyComposition: React.FC = () => {
           ]}
         />
       </TransitionSeries.Sequence>
-      <TransitionSeries.Sequence
-        name="Next clip"
-        trimBefore={1 * fps}
-        durationInFrames={5 * fps}
-      >
+      <TransitionSeries.Sequence name="Next clip" trimBefore={1 * fps} durationInFrames={5 * fps}>
         <Video
           name="Next footage"
           src={staticFile("next.mp4")}

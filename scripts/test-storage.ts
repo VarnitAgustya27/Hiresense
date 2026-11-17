@@ -23,7 +23,10 @@ async function testStorage() {
   console.log("Signed in as student:", userId);
 
   // 1. Upload valid avatar image into avatars/{userId}/avatar.png
-  const smallBuffer = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  const smallBuffer = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
   const filePath = `${userId}/avatar_test_${Date.now()}.png`;
 
   console.log("Uploading valid image to:", filePath);
@@ -85,4 +88,3 @@ testStorage().catch((err) => {
   console.error("Unexpected error:", err);
   process.exit(1);
 });
-

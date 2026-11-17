@@ -1,18 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react";
-import {
-  Building,
-  UserCheck,
-  Briefcase,
-  Plus,
-  Search,
-  SlidersHorizontal,
-  Sparkles,
-  ArrowRight,
-  Inbox,
-  Filter,
-  User,
-} from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Plus, Search, Briefcase, Inbox, User } from "lucide-react";
 import { supabase, fetchUserProfile } from "@/lib/supabase";
 import type { Profile, Job } from "@/types/database.types";
 import { JobCard } from "@/components/JobCard";
@@ -20,6 +8,8 @@ import { JobDetailPanel } from "@/components/JobDetailPanel";
 import { AddJobModal } from "@/components/AddJobModal";
 import { EditJobModal } from "@/components/EditJobModal";
 import ProfileDropdown from "@/components/kokonutui/profile-dropdown";
+import { useApplications } from "@/hooks/useApplications";
+import type { ApplicationRecord } from "@/lib/applications";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -52,6 +42,43 @@ function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [recruiterTab, setRecruiterTab] = useState<"all" | "published" | "draft">("all");
   const [studentWorkModeFilter, setStudentWorkModeFilter] = useState<string>("all");
+  const [isAppliedFilterActive, setIsAppliedFilterActive] = useState<boolean>(false);
+
+  // Applications store subscription
+  const { applications } = useApplications(profile?.id || "guest_student");
+
+  const applicationsMap = useMemo(() => {
+    const map = new Map<string, ApplicationRecord>();
+    applications.forEach((app) => map.set(app.jobId, app));
+    return map;
+  }, [applications]);
+
+  const appliedCount = useMemo(() => {
+    return jobs.filter((j) => applicationsMap.has(j.id)).length;
+  }, [jobs, applicationsMap]);
+
+  // Bookmarks store (separate concept from Applied)
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = localStorage.getItem("hiresense_saved_jobs");
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const handleToggleBookmark = useCallback((jobId: string) => {
+    setBookmarkedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("hiresense_saved_jobs", JSON.stringify(Array.from(next)));
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     async function loadSessionAndProfile() {
@@ -90,7 +117,7 @@ function DashboardPage() {
   }, [navigate]);
 
   // Load jobs based on role
-  const loadJobs = async () => {
+  const loadJobs = useCallback(async () => {
     if (!profile) return;
     setJobsLoading(true);
 
@@ -127,13 +154,13 @@ function DashboardPage() {
     } finally {
       setJobsLoading(false);
     }
-  };
+  }, [profile, selectedJobId]);
 
   useEffect(() => {
     if (profile) {
       loadJobs();
     }
-  }, [profile]);
+  }, [profile, loadJobs]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -154,15 +181,13 @@ function DashboardPage() {
       if (error) throw error;
       setJobs((prev) => prev.map((j) => (j.id === job.id ? (data as Job) : j)));
     } catch (err) {
-      console.error("Status toggle error:", err);
+      console.error("Toggle job status error:", err);
     }
   };
 
-  // Recruiter: Delete job
+  // Recruiter: Delete job listing
   const handleDeleteJob = async (job: Job) => {
-    if (!window.confirm(`Are you sure you want to delete "${job.title}"?`)) {
-      return;
-    }
+    if (!confirm(`Are you sure you want to delete "${job.title}"?`)) return;
 
     try {
       const { error } = await supabase.from("jobs").delete().eq("id", job.id);
@@ -198,16 +223,32 @@ function DashboardPage() {
         if (recruiterTab === "draft" && job.status !== "draft") return false;
       }
 
-      // Student work mode filter
-      if (profile?.role === "student" && studentWorkModeFilter !== "all") {
-        if ((job.work_mode || "").toLowerCase() !== studentWorkModeFilter) {
+      // Student filters
+      if (profile?.role === "student") {
+        // "Applied" filter narrows to jobs with an application
+        if (isAppliedFilterActive && !applicationsMap.has(job.id)) {
           return false;
+        }
+
+        // Work mode filter works alongside "Applied"
+        if (studentWorkModeFilter !== "all") {
+          if ((job.work_mode || "").toLowerCase() !== studentWorkModeFilter) {
+            return false;
+          }
         }
       }
 
       return true;
     });
-  }, [jobs, searchQuery, recruiterTab, studentWorkModeFilter, profile]);
+  }, [
+    jobs,
+    searchQuery,
+    recruiterTab,
+    isAppliedFilterActive,
+    studentWorkModeFilter,
+    profile,
+    applicationsMap,
+  ]);
 
   const selectedJob = useMemo(() => {
     if (!selectedJobId) return filteredJobs[0] || null;
@@ -238,15 +279,12 @@ function DashboardPage() {
         {/* Workspace Top Header Bar */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-[rgba(255,255,255,0.08)] pb-6">
           <div>
-            <div className="flex items-center gap-3 mb-2.5">
-              <Link
-                to="/"
-                className="flex items-center gap-2 group transition-opacity hover:opacity-85"
-              >
-                <div className="flex h-7 w-7 items-center justify-center rounded-[30%] bg-[#f5f5f5] text-[13px] font-[700] text-[#0a0a0a] transition-transform group-hover:scale-105">
+            <div className="flex items-center gap-2 mb-2">
+              <Link to="/" className="flex items-center gap-2 group">
+                <div className="flex h-6 w-6 items-center justify-center rounded-[30%] bg-[#f5f5f5] text-[12px] font-[700] text-[#0a0a0a] transition-transform group-hover:scale-105">
                   H
                 </div>
-                <span className="text-[15px] font-[650] tracking-tight text-[#f5f5f5]">
+                <span className="text-[14px] font-[650] text-[#f5f5f5] tracking-tight">
                   HireSense
                 </span>
               </Link>
@@ -374,7 +412,23 @@ function DashboardPage() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 self-start sm:self-auto">
+            <div className="flex items-center gap-1.5 self-start sm:self-auto flex-wrap">
+              {/* "Applied" Filter Pill with Tabular Count */}
+              <button
+                type="button"
+                onClick={() => setIsAppliedFilterActive(!isAppliedFilterActive)}
+                className={`h-9 px-4 rounded-full text-[12px] font-[600] transition-colors inline-flex items-center gap-1.5 ${
+                  isAppliedFilterActive
+                    ? "bg-[#f5f5f5] text-[#0a0a0a]"
+                    : "bg-[#141414] text-[#8a8a8a] border border-[rgba(255,255,255,0.08)] hover:text-[#f5f5f5]"
+                }`}
+              >
+                <span>Applied</span>
+                {appliedCount > 0 && (
+                  <span className="tabular font-[600] text-[11px] opacity-90">{appliedCount}</span>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setStudentWorkModeFilter("all")}
@@ -430,31 +484,51 @@ function DashboardPage() {
             <p className="mt-3 text-[14px] text-[#8a8a8a]">Loading job listings...</p>
           </div>
         ) : filteredJobs.length === 0 ? (
-          <div className="rounded-[24px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-12 text-center space-y-4 max-w-lg mx-auto my-12">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[30%] bg-[#1a1a1a] text-[#8a8a8a]">
-              <Inbox size={24} />
-            </div>
-            <div>
-              <h3 className="text-[18px] font-[650] text-[#f5f5f5]">
-                {isRecruiter ? "No job listings yet." : "No published jobs found."}
-              </h3>
-              <p className="mt-1 text-[13px] text-[#8a8a8a] leading-relaxed">
-                {isRecruiter
-                  ? "Click 'Add listing' to structure your first job description from raw text."
-                  : "Check back soon as recruiters publish verified positions to the feed."}
-              </p>
-            </div>
-            {isRecruiter && (
+          isAppliedFilterActive ? (
+            /* Calm empty state specifically for "Applied" */
+            <div className="rounded-[24px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-12 text-center space-y-4 max-w-lg mx-auto my-12">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[30%] bg-[#1a1a1a] text-[#8a8a8a]">
+                <Inbox size={24} />
+              </div>
+              <p className="text-[14px] text-[#8a8a8a]">You haven't applied to any roles yet.</p>
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(true)}
-                className="inline-flex h-10 items-center gap-2 rounded-full bg-[#f5f5f5] px-6 text-[13px] font-[600] text-[#0a0a0a] transition-all hover:bg-[#e0e0e0]"
+                onClick={() => {
+                  setIsAppliedFilterActive(false);
+                  setStudentWorkModeFilter("all");
+                }}
+                className="inline-flex h-10 items-center justify-center rounded-full bg-[#1a1a1a] border border-[rgba(255,255,255,0.12)] px-6 text-[13px] font-[600] text-[#f5f5f5] hover:bg-[#262626] transition-colors"
               >
-                <Plus size={15} />
-                <span>Add first listing</span>
+                Browse all roles
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="rounded-[24px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-12 text-center space-y-4 max-w-lg mx-auto my-12">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[30%] bg-[#1a1a1a] text-[#8a8a8a]">
+                <Inbox size={24} />
+              </div>
+              <div>
+                <h3 className="text-[18px] font-[650] text-[#f5f5f5]">
+                  {isRecruiter ? "No job listings yet." : "No published jobs found."}
+                </h3>
+                <p className="mt-1 text-[13px] text-[#8a8a8a] leading-relaxed">
+                  {isRecruiter
+                    ? "Click 'Add listing' to structure your first job description from raw text."
+                    : "Check back soon as recruiters publish verified positions to the feed."}
+                </p>
+              </div>
+              {isRecruiter && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[#f5f5f5] px-6 text-[13px] font-[600] text-[#0a0a0a] transition-all hover:bg-[#e0e0e0]"
+                >
+                  <Plus size={15} />
+                  <span>Add first listing</span>
+                </button>
+              )}
+            </div>
+          )
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Left Column: Job Cards List View */}
@@ -466,6 +540,9 @@ function DashboardPage() {
                   isSelected={selectedJob?.id === job.id}
                   onSelect={(j) => setSelectedJobId(j.id)}
                   isRecruiter={isRecruiter}
+                  application={applicationsMap.get(job.id) || null}
+                  isBookmarked={bookmarkedIds.has(job.id)}
+                  onToggleBookmark={handleToggleBookmark}
                   onEdit={(j) => setEditingJob(j)}
                   onToggleStatus={(j) => handleToggleJobStatus(j)}
                 />
@@ -478,6 +555,9 @@ function DashboardPage() {
                 <JobDetailPanel
                   job={selectedJob}
                   isRecruiter={isRecruiter}
+                  application={applicationsMap.get(selectedJob.id) || null}
+                  isBookmarked={bookmarkedIds.has(selectedJob.id)}
+                  onToggleBookmark={handleToggleBookmark}
                   onEdit={(j) => setEditingJob(j)}
                   onToggleStatus={(j) => handleToggleJobStatus(j)}
                   onDelete={(j) => handleDeleteJob(j)}
@@ -495,6 +575,9 @@ function DashboardPage() {
                 <JobDetailPanel
                   job={selectedJob}
                   isRecruiter={isRecruiter}
+                  application={applicationsMap.get(selectedJob.id) || null}
+                  isBookmarked={bookmarkedIds.has(selectedJob.id)}
+                  onToggleBookmark={handleToggleBookmark}
                   onEdit={(j) => setEditingJob(j)}
                   onToggleStatus={(j) => handleToggleJobStatus(j)}
                   onDelete={(j) => handleDeleteJob(j)}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Video,
   Languages,
@@ -6,26 +6,54 @@ import {
   Sparkles,
   CheckCircle2,
   Clock,
+  AlertCircle,
 } from "lucide-react";
 import { AiInterviewRoom } from "@/components/interview/AiInterviewRoom";
+import { useMediaSession } from "@/hooks/useMediaSession";
+import { recordConsentAndLanguage } from "@/lib/applications";
 
 interface InterviewLaunchCardProps {
+  userId?: string;
+  jobId?: string;
   candidateName: string;
   targetJobTitle: string;
-  jobPosting?: Record<string, any>;
-  preferredLanguage?: "en" | "hi" | "code_mixed";
+  jobPosting?: Record<string, unknown>;
+  preferredLanguage?: "en" | "hi" | "hinglish";
   verificationQuestions?: string[];
 }
 
 export function InterviewLaunchCard({
+  userId = "guest_user",
+  jobId = "demo-job",
   candidateName,
   targetJobTitle,
   jobPosting = {},
   preferredLanguage = "en",
   verificationQuestions = [],
 }: InterviewLaunchCardProps) {
-  const [selectedLanguage, setSelectedLanguage] = useState(preferredLanguage);
+  const [selectedLanguage, setSelectedLanguage] = useState<"en" | "hi" | "hinglish">(
+    preferredLanguage,
+  );
   const [isInterviewOpen, setIsInterviewOpen] = useState(false);
+
+  const { isAcquired, permissionStatus, error: mediaError, acquire } = useMediaSession();
+
+  // Pre-check / acquire permissions on mount silently
+  useEffect(() => {
+    acquire().catch(() => {});
+  }, [acquire]);
+
+  const handleStart = async () => {
+    // Record consent and language in persistence
+    recordConsentAndLanguage(userId, jobId, selectedLanguage, new Date().toISOString());
+
+    // Acquire stream if not already acquired
+    if (!isAcquired) {
+      await acquire().catch(() => {});
+    }
+
+    setIsInterviewOpen(true);
+  };
 
   return (
     <>
@@ -33,7 +61,7 @@ export function InterviewLaunchCard({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[rgba(255,255,255,0.08)] pb-5">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#1a1a1a] text-[11px] font-[600] text-[#60a5fa] border border-[#3b82f6]/30">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[#1a1a1a] text-[11px] font-[600] text-[#0066ff] border border-[rgba(255,255,255,0.06)]">
                 Next Step · AI Technical Assessment with Mira
               </span>
             </div>
@@ -49,13 +77,33 @@ export function InterviewLaunchCard({
           {/* Primary Start Interview Button */}
           <button
             type="button"
-            onClick={() => setIsInterviewOpen(true)}
-            className="inline-flex h-12 items-center gap-2 rounded-full bg-[#f5f5f5] px-8 text-[15px] font-[600] text-[#0a0a0a] transition-all hover:bg-[#e0e0e0] active:scale-[0.98] shadow-lg self-start sm:self-center shrink-0"
+            onClick={handleStart}
+            className="inline-flex h-12 items-center gap-2 rounded-full bg-[#f5f5f5] px-8 text-[15px] font-[600] text-[#0a0a0a] transition-all hover:bg-[#e0e0e0] active:scale-[0.98] self-start sm:self-center shrink-0"
           >
             <span>Start AI interview</span>
             <ArrowRight size={16} />
           </button>
         </div>
+
+        {/* Media permission warning if denied */}
+        {permissionStatus === "denied" && (
+          <div className="rounded-[16px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.10)] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[13px]">
+            <div className="flex items-center gap-2.5 text-[#8a8a8a]">
+              <AlertCircle size={16} className="text-[#f5f5f5] shrink-0" />
+              <span>
+                Camera or microphone access is blocked in your browser settings. Please enable
+                camera and microphone permissions to proceed with voice/video.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => acquire()}
+              className="inline-flex h-8 items-center px-4 rounded-full bg-[#141414] border border-[rgba(255,255,255,0.12)] text-[12px] font-[600] text-[#f5f5f5] hover:bg-[#262626] transition-colors shrink-0"
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
         {/* Interview Configuration Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -66,7 +114,7 @@ export function InterviewLaunchCard({
               <span>Interview Language</span>
             </div>
             <div className="flex items-center gap-1.5 pt-1">
-              {(["en", "hi", "code_mixed"] as const).map((lang) => (
+              {(["en", "hi", "hinglish"] as const).map((lang) => (
                 <button
                   key={lang}
                   type="button"
@@ -94,9 +142,13 @@ export function InterviewLaunchCard({
                 <CheckCircle2 size={13} />
                 <span>Mira AI Ready</span>
               </span>
-              <span className="inline-flex items-center gap-1.5 text-emerald-400">
+              <span
+                className={`inline-flex items-center gap-1.5 ${
+                  isAcquired ? "text-emerald-400" : "text-[#8a8a8a]"
+                }`}
+              >
                 <CheckCircle2 size={13} />
-                <span>Webcam & Mic Check</span>
+                <span>{isAcquired ? "Webcam & Mic Connected" : "Permission Standby"}</span>
               </span>
             </div>
           </div>
@@ -117,7 +169,7 @@ export function InterviewLaunchCard({
         {verificationQuestions && verificationQuestions.length > 0 && (
           <div className="rounded-[16px] bg-[#1a1a1a]/60 border border-[rgba(255,255,255,0.06)] p-4 space-y-2.5">
             <div className="flex items-center gap-2 text-[12px] font-[650] text-[#f5f5f5]">
-              <Sparkles size={14} className="text-[#60a5fa]" />
+              <Sparkles size={14} className="text-[#f5f5f5]" />
               <span>AI Question Planner: Tailored Topics for Your Session</span>
             </div>
             <ul className="space-y-1.5 text-[13px] text-[#8a8a8a] pl-5 list-disc">
@@ -134,6 +186,8 @@ export function InterviewLaunchCard({
       {/* Live AI Interview Room Modal */}
       {isInterviewOpen && (
         <AiInterviewRoom
+          userId={userId}
+          jobId={jobId}
           candidateName={candidateName}
           targetJobTitle={targetJobTitle}
           jobPosting={jobPosting}

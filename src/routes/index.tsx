@@ -1,6 +1,6 @@
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Cursor, Grain, ScrollProgress, SmoothScroll } from "@/components/hs/Experience";
+import { Grain, ScrollProgress, SmoothScroll } from "@/components/hs/Experience";
 import { ReadyContext } from "@/components/hs/motion";
 import { Nav } from "@/components/hs/Nav";
 import { Hero } from "@/components/hs/Hero";
@@ -47,7 +47,6 @@ function Index() {
     <ReadyContext.Provider value={ready}>
       <SmoothScroll />
       <ScrollProgress />
-      <Cursor />
       <Grain />
       <Nav />
       <main>

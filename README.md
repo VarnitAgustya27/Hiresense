@@ -22,11 +22,11 @@ npm run lint
 
 ## Context docs
 
-| File | Purpose |
-|---|---|
-| `CLAUDE.md` / `GEMINI.md` | Full product, design, and engineering spec |
-| `DESIGN.md` | Design system tokens (Mobbin analysis) |
-| `AI_Recruitment_Platform_Project_Report1.docx` | Product methodology report |
+| File                                           | Purpose                                    |
+| ---------------------------------------------- | ------------------------------------------ |
+| `CLAUDE.md` / `GEMINI.md`                      | Full product, design, and engineering spec |
+| `DESIGN.md`                                    | Design system tokens (Mobbin analysis)     |
+| `AI_Recruitment_Platform_Project_Report1.docx` | Product methodology report                 |
 
 ## Structure
 
@@ -38,3 +38,4 @@ src/
   hooks/            # Custom hooks
   styles.css        # Tailwind v4 + CSS variable tokens
 ``
+```
