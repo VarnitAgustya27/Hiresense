@@ -1296,21 +1296,7 @@ export function AiInterviewRoom({
         {/* ========================================================= */}
         {stage === "evaluating" && (
           <div className="flex-1 flex flex-col items-center justify-center min-h-[520px] w-full max-w-2xl mx-auto px-4 py-12 text-center animate-in fade-in duration-300">
-            <div className="w-full rounded-[24px] bg-[#141414] border border-[rgba(255,255,255,0.10)] p-8 sm:p-12 space-y-8 shadow-2xl relative overflow-hidden">
-              {/* Subtle top indicator bar */}
-              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[rgba(255,255,255,0.3)] to-transparent" />
-
-              {/* Status Pill */}
-              <div className="inline-flex items-center gap-2 rounded-full bg-[#1a1a1a] border border-[rgba(255,255,255,0.12)] px-4 py-1.5 mx-auto">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
-                <span className="text-[12px] font-[600] text-[#f5f5f5] tracking-wide">
-                  Mira Evaluation Engine · In progress
-                </span>
-              </div>
-
+            <div className="w-full rounded-[24px] bg-[#141414] border border-[rgba(255,255,255,0.10)] p-8 sm:p-12 space-y-8 relative">
               {/* Kokonut UI Animated Wave Text Loader */}
               <div className="py-2">
                 <AITextLoading
@@ -1324,7 +1310,7 @@ export function AiInterviewRoom({
                   ]}
                   className="text-2xl sm:text-3xl font-[650] text-[#f5f5f5] tracking-tight justify-center"
                   interval={1800}
-                  showElapsed={true}
+                  showElapsed={false}
                   label="Evaluating interview session"
                 />
               </div>
