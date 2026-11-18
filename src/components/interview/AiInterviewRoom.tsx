@@ -35,6 +35,7 @@ import {
 } from "@/components/kokonutui/synced-transcript";
 import AI_Voice from "@/components/kokonutui/ai-voice";
 import { AppleActivityCard } from "@/components/kokonutui/apple-activity-card";
+import AITextLoading from "@/components/kokonutui/ai-text-loading";
 import {
   recordInterviewStarted,
   recordInterviewProgress,
@@ -101,8 +102,8 @@ export function AiInterviewRoom({
   const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
 
-  // Session stage: "lobby" | "interview" | "scorecard"
-  const [stage, setStage] = useState<"lobby" | "interview" | "scorecard">("lobby");
+  // Session stage: "lobby" | "interview" | "evaluating" | "scorecard"
+  const [stage, setStage] = useState<"lobby" | "interview" | "evaluating" | "scorecard">("lobby");
 
   // Language mapping
   const normalizedLanguage: "en" | "hi" | "hinglish" =
@@ -648,12 +649,14 @@ export function AiInterviewRoom({
     cancelSpeech();
     stopSpeechRecognition();
     setVoiceState("thinking");
+    setStage("evaluating");
 
     // Finalize all candidate turns
     setTurns((prev) =>
       prev.map((t) => (t.speaker === "candidate" ? { ...t, isStreaming: false } : t)),
     );
 
+    const startTime = Date.now();
     let finalScorecard: InterviewScorecard | null = null;
 
     try {
@@ -685,6 +688,12 @@ export function AiInterviewRoom({
         allAnswers,
         allDurations,
       );
+    }
+
+    // Ensure candidate experiences the loading animation smoothly for at least 2.5 seconds
+    const elapsed = Date.now() - startTime;
+    if (elapsed < 2500) {
+      await new Promise((r) => setTimeout(r, 2500 - elapsed));
     }
 
     recordInterviewCompleted(userId, jobId, finalScorecard);
@@ -1309,6 +1318,60 @@ export function AiInterviewRoom({
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* STAGE 2.5: EVALUATION LOADING SCREEN (Kokonut UI)         */}
+        {/* ========================================================= */}
+        {stage === "evaluating" && (
+          <div className="flex-1 flex flex-col items-center justify-center min-h-[520px] w-full max-w-2xl mx-auto px-4 py-12 text-center animate-in fade-in duration-300">
+            <div className="w-full rounded-[24px] bg-[#141414] border border-[rgba(255,255,255,0.10)] p-8 sm:p-12 space-y-8 shadow-2xl relative overflow-hidden">
+              {/* Subtle top indicator bar */}
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[rgba(255,255,255,0.3)] to-transparent" />
+
+              {/* Status Pill */}
+              <div className="inline-flex items-center gap-2 rounded-full bg-[#1a1a1a] border border-[rgba(255,255,255,0.12)] px-4 py-1.5 mx-auto">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <span className="text-[12px] font-[600] text-[#f5f5f5] tracking-wide">
+                  Mira Evaluation Engine · In progress
+                </span>
+              </div>
+
+              {/* Kokonut UI Animated Wave Text Loader */}
+              <div className="py-2">
+                <AITextLoading
+                  texts={[
+                    "Evaluating responses...",
+                    "Analyzing communication evidence...",
+                    "Benchmarking technical competencies...",
+                    "Calculating objective rubrics...",
+                    "Compiling comprehensive scorecard...",
+                    "Almost ready...",
+                  ]}
+                  className="text-2xl sm:text-3xl font-[650] text-[#f5f5f5] tracking-tight justify-center"
+                  interval={1800}
+                  showElapsed={true}
+                  label="Evaluating interview session"
+                />
+              </div>
+
+              {/* Editorial context */}
+              <div className="space-y-3 max-w-md mx-auto pt-2 border-t border-[rgba(255,255,255,0.06)]">
+                <p className="text-[13px] text-[#8a8a8a] leading-relaxed">
+                  Every score links directly back to transcripts and verified evidence. Human
+                  recruiters review all decisions.
+                </p>
+                <div className="flex items-center justify-center gap-3 text-[12px] text-[#5c5c5c]">
+                  <span>{sessionQuestions.length} Questions Processed</span>
+                  <span>•</span>
+                  <span>Session Duration {formatTime(sessionSeconds)}</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

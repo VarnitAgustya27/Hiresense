@@ -51,7 +51,8 @@ function base64ToBlobUrl(base64: string, mimeType: string): string {
   for (let i = 0; i < len; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
-  const blob = new Blob([bytes], { type: mimeType });
+  const cleanMime = mimeType === "audio/mp3" || !mimeType ? "audio/mpeg" : mimeType;
+  const blob = new Blob([bytes], { type: cleanMime });
   return URL.createObjectURL(blob);
 }
 
@@ -89,7 +90,24 @@ function selectBrowserVoice(
     if (hiVoice) return hiVoice;
   }
 
-  // Preferred order: en-IN, en-GB, en-US, any en*
+  // Preferred order: en-IN (Ravi / male), en-US (David / Mark / Guy / male), any en-IN, en-GB, en-US
+  const enInMale = voices.find(
+    (v) =>
+      (v.lang.toLowerCase().includes("en-in") || v.name.toLowerCase().includes("india")) &&
+      (v.name.toLowerCase().includes("ravi") || v.name.toLowerCase().includes("male")),
+  );
+  if (enInMale) return enInMale;
+
+  const enUsMale = voices.find(
+    (v) =>
+      v.lang.toLowerCase().includes("en-us") &&
+      (v.name.toLowerCase().includes("david") ||
+        v.name.toLowerCase().includes("mark") ||
+        v.name.toLowerCase().includes("guy") ||
+        v.name.toLowerCase().includes("male")),
+  );
+  if (enUsMale) return enUsMale;
+
   const enIn = voices.find(
     (v) => v.lang.toLowerCase().includes("en-in") || v.name.toLowerCase().includes("india"),
   );
@@ -259,7 +277,7 @@ export function useMiraSpeech(): {
 
         const data = await resp.json();
         if (data.audioBase64 && !data.useBrowserFallback) {
-          const mime = data.mimeType || "audio/mp3";
+          const mime = data.mimeType || "audio/mpeg";
           const objectUrl = base64ToBlobUrl(data.audioBase64, mime);
           prefetchCacheRef.current.set(cacheKey, {
             objectUrl,
@@ -488,6 +506,29 @@ export function useMiraSpeech(): {
           if (fallbackStarted || soundStarted) return;
           fallbackStarted = true;
           serverTtsDisabledRef.current = true;
+
+          // Hard kill server audio before falling back to browser engine
+          if (activeAudioRef.current) {
+            const a = activeAudioRef.current;
+            a.onended = null;
+            a.onerror = null;
+            a.onplaying = null;
+            a.onloadedmetadata = null;
+            a.pause();
+            a.removeAttribute("src");
+            a.load();
+            activeAudioRef.current = null;
+          }
+
+          if (currentEphemeralUrlRef.current) {
+            try {
+              URL.revokeObjectURL(currentEphemeralUrlRef.current);
+            } catch {
+              // ignore
+            }
+            currentEphemeralUrlRef.current = null;
+          }
+
           startBrowserEngine();
         };
 
@@ -566,7 +607,7 @@ export function useMiraSpeech(): {
               }
 
               if (data.audioBase64 && !data.useBrowserFallback) {
-                const mime = data.mimeType || "audio/mp3";
+                const mime = data.mimeType || "audio/mpeg";
                 audioSrc = base64ToBlobUrl(data.audioBase64, mime);
                 currentEphemeralUrlRef.current = audioSrc;
               } else {
@@ -658,7 +699,17 @@ export function useMiraSpeech(): {
 
           audio.onerror = () => {
             if (rAfId !== null) cancelAnimationFrame(rAfId);
-            activeAudioRef.current = null;
+            const a = activeAudioRef.current;
+            if (a) {
+              a.onended = null;
+              a.onerror = null;
+              a.onplaying = null;
+              a.onloadedmetadata = null;
+              a.pause();
+              a.removeAttribute("src");
+              a.load();
+              activeAudioRef.current = null;
+            }
             if (id !== requestIdRef.current) {
               safeResolve("cancelled");
               return;
@@ -673,6 +724,17 @@ export function useMiraSpeech(): {
           try {
             await audio.play();
           } catch {
+            const a = activeAudioRef.current;
+            if (a) {
+              a.onended = null;
+              a.onerror = null;
+              a.onplaying = null;
+              a.onloadedmetadata = null;
+              a.pause();
+              a.removeAttribute("src");
+              a.load();
+              activeAudioRef.current = null;
+            }
             if (id !== requestIdRef.current) {
               safeResolve("cancelled");
               return;

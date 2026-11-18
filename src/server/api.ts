@@ -10,7 +10,7 @@ const LLM_MODEL_PRIMARY = process.env.LLM_MODEL_PRIMARY || "gemini-3.8-flash";
 const LLM_MODEL_FALLBACK = process.env.LLM_MODEL_FALLBACK || "gpt-4o-mini";
 const STT_MODEL = process.env.STT_MODEL || "gemini-3.8-flash";
 const TTS_MODEL = process.env.TTS_MODEL || "gemini-2.5-flash";
-const TTS_VOICE = process.env.TTS_VOICE || "Puck";
+const TTS_VOICE = process.env.TTS_VOICE || "echo";
 
 // Timeouts in milliseconds
 const TIMEOUT_LLM = 25000;
@@ -737,6 +737,12 @@ export async function handleSpeechSynthesize(payload: SynthesizeRequest) {
   // If OpenAI key is available, call OpenAI TTS
   if (openAiKey) {
     try {
+      const chosenVoice =
+        payload.voice &&
+        ["alloy", "echo", "fable", "onyx", "nova", "shimmer"].includes(payload.voice)
+          ? payload.voice
+          : TTS_VOICE;
+
       const resp = await fetchWithRetry(
         "https://api.openai.com/v1/audio/speech",
         {
@@ -748,7 +754,7 @@ export async function handleSpeechSynthesize(payload: SynthesizeRequest) {
           body: JSON.stringify({
             model: "tts-1",
             input: payload.text,
-            voice: "shimmer",
+            voice: chosenVoice,
             response_format: "mp3",
           }),
         },
@@ -760,7 +766,7 @@ export async function handleSpeechSynthesize(payload: SynthesizeRequest) {
         const base64 = Buffer.from(arrayBuffer).toString("base64");
         return {
           audioBase64: base64,
-          mimeType: "audio/mp3",
+          mimeType: "audio/mpeg",
           useBrowserFallback: false,
         };
       }
