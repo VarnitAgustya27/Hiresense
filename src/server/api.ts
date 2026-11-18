@@ -4,6 +4,7 @@ import {
   evaluateInterviewSession,
   type InterviewQuestion,
 } from "../lib/ai-interview";
+import { getReferenceQuestionsForPrompt } from "../lib/interview-dataset";
 
 // Configurable model IDs and voices from environment
 const LLM_MODEL_PRIMARY = process.env.LLM_MODEL_PRIMARY || "gemini-3.8-flash";
@@ -125,6 +126,18 @@ Output JSON format matching this schema:
   ]
 }`;
 
+    // Retrieve grounded benchmark questions from Hugging Face dataset
+    const companyName = (payload.jobPosting?.company ||
+      payload.jobPosting?.company_name ||
+      "") as string;
+    const benchmarkQuestions = getReferenceQuestionsForPrompt(payload.jobTitle, companyName, 5);
+
+    const userPromptContent = `Job Title: ${payload.jobTitle}\nJob Requirements: ${JSON.stringify(payload.jobPosting)}\nCandidate Summary: ${payload.resumeSummary || "Standard candidate profile"}${
+      benchmarkQuestions.length > 0
+        ? `\n\nReference Benchmark Questions for this role from the Hugging Face Interview Dataset:\n${benchmarkQuestions.map((q, idx) => `${idx + 1}. ${q}`).join("\n")}`
+        : ""
+    }`;
+
     // 1. Try Gemini primary
     if (geminiKey) {
       try {
@@ -139,7 +152,7 @@ Output JSON format matching this schema:
                   parts: [
                     { text: systemPrompt },
                     {
-                      text: `Job Requirements: ${JSON.stringify(payload.jobPosting)}\nCandidate Summary: ${payload.resumeSummary}`,
+                      text: userPromptContent,
                     },
                   ],
                 },
@@ -191,7 +204,7 @@ Output JSON format matching this schema:
                 { role: "system", content: systemPrompt },
                 {
                   role: "user",
-                  content: `Job Requirements: ${JSON.stringify(payload.jobPosting)}\nCandidate Summary: ${payload.resumeSummary}`,
+                  content: userPromptContent,
                 },
               ],
               response_format: { type: "json_object" },

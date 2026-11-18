@@ -365,8 +365,8 @@ export function AiInterviewRoom({
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
         // Barge-in check: if Mira is currently speaking, cancel immediately
-        if (isSpeechSpeaking()) {
-          cancelSpeech();
+        if (isSpeechSpeakingRef.current()) {
+          cancelSpeechRef.current();
           setVoiceState("listening");
         }
 
@@ -439,15 +439,22 @@ export function AiInterviewRoom({
     } catch (err) {
       console.warn("Speech recognition initialization fallback:", err);
     }
-  }, [isMicMuted, stage, language, candidateName, isSpeechSpeaking, cancelSpeech]);
+  }, [isMicMuted, stage, language, candidateName]);
 
-  // Clean unmount safety
+  const cancelSpeechRef = useRef(cancelSpeech);
+  cancelSpeechRef.current = cancelSpeech;
+  const stopSpeechRecognitionRef = useRef(stopSpeechRecognition);
+  stopSpeechRecognitionRef.current = stopSpeechRecognition;
+  const isSpeechSpeakingRef = useRef(isSpeechSpeaking);
+  isSpeechSpeakingRef.current = isSpeechSpeaking;
+
+  // Clean unmount safety - strictly runs only when component unmounts
   useEffect(() => {
     return () => {
-      cancelSpeech();
-      stopSpeechRecognition();
+      cancelSpeechRef.current();
+      stopSpeechRecognitionRef.current();
     };
-  }, [cancelSpeech, stopSpeechRecognition]);
+  }, []);
 
   // Track preparation state for the current question
   const currentQ = sessionQuestions[currentIdx];
@@ -562,7 +569,7 @@ export function AiInterviewRoom({
     return () => {
       clearTimeout(timer);
     };
-  }, [stage, currentIdx]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stage, currentIdx, sessionQuestions.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Start interview from lobby: snapshot questions into sessionQuestions
   const handleJoinInterview = async () => {
@@ -575,7 +582,17 @@ export function AiInterviewRoom({
       await acquire().catch(() => {});
     }
 
-    const snapshot = [...questions];
+    let questionsToUse = questions;
+    if (questionsToUse.length === 0) {
+      questionsToUse = generateInterviewQuestions(
+        targetJobTitle,
+        jobPosting,
+        verificationQuestions,
+      );
+      setQuestions(questionsToUse);
+    }
+
+    const snapshot = [...questionsToUse];
     setSessionQuestions(snapshot);
     setStage("interview");
     setCurrentIdx(0);

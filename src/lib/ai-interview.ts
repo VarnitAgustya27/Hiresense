@@ -1,6 +1,8 @@
 // HireSense AI Interview Evaluation Engine
 // Generates role-grounded questions and computes structured scorecards.
 
+import { generateQuestionsFromDataset } from "@/lib/interview-dataset";
+
 export interface InterviewQuestion {
   id: string;
   phase: "intro" | "technical" | "architecture" | "scenario" | "closing";
@@ -47,129 +49,14 @@ export interface InterviewScorecard {
 }
 
 /**
- * Dynamically builds a 5-question interview plan grounded in the job requisition and candidate background.
+ * Dynamically builds a 5-question interview plan grounded in the dataset and candidate background.
  */
 export function generateInterviewQuestions(
   targetJobTitle: string,
   jobPosting: Record<string, unknown> = {},
   verificationQuestions: string[] = [],
 ): InterviewQuestion[] {
-  const qualifications = jobPosting?.qualifications as { mandatory?: string[] } | undefined;
-  const mandatoryQuals: string[] = qualifications?.mandatory || [];
-  const techStack = (jobPosting?.tech_stack || []) as Array<{
-    name: string;
-    requirement_type?: string;
-  }>;
-  const mandatoryTech = techStack
-    .filter((t) => t.requirement_type === "mandatory")
-    .map((t) => t.name);
-
-  const primaryTech = mandatoryTech[0] || "React and TypeScript";
-  const secondaryTech = mandatoryTech[1] || mandatoryTech[0] || "modern component architecture";
-
-  return [
-    {
-      id: "q1_intro",
-      phase: "intro",
-      phaseLabel: "Background & Project Verification",
-      question: `Hi, I'm Mira. Welcome to your technical interview for the ${targetJobTitle} position. To start, could you introduce yourself and walk me through the most technically challenging project you have worked on recently?`,
-      contextHint:
-        "Focus on technical architecture, your individual role, tools chosen, and measurable outcomes.",
-      expectedKeywords: [
-        "project",
-        "architecture",
-        "built",
-        "designed",
-        "scale",
-        "team",
-        "performance",
-      ],
-      idealAnswerOutline:
-        "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome.",
-    },
-    {
-      id: "q2_technical",
-      phase: "technical",
-      phaseLabel: "Core Stack & Technical Depth",
-      question:
-        verificationQuestions &&
-        verificationQuestions.length > 0 &&
-        verificationQuestions[0].length > 15
-          ? verificationQuestions[0]
-          : `This role demands high proficiency in ${primaryTech}. Can you explain how you handle state management, asynchronous data fetching, and race conditions in production applications?`,
-      contextHint:
-        "Highlight patterns you have practically implemented, caching strategies, and edge cases.",
-      expectedKeywords: [
-        primaryTech.toLowerCase(),
-        "state",
-        "cache",
-        "async",
-        "error",
-        "lifecycle",
-        "optimization",
-      ],
-      idealAnswerOutline:
-        "Directly addresses state isolation, caching layers (e.g., React Query / TanStack), handling pending requests, cancel tokens, and error boundary integration.",
-    },
-    {
-      id: "q3_architecture",
-      phase: "architecture",
-      phaseLabel: "System Design & Performance",
-      question: `When building web applications that handle large data sets and responsive UI interactions, what performance bottlenecks do you actively monitor, and how do you optimize them?`,
-      contextHint:
-        "Discuss render cycles, bundle splitting, Web Vitals (LCP, INP), or API payload strategies.",
-      expectedKeywords: [
-        "render",
-        "bundle",
-        "memo",
-        "lazy",
-        "performance",
-        "vitals",
-        "metrics",
-        "network",
-      ],
-      idealAnswerOutline:
-        "Covers both client-side optimizations (code splitting, virtualization, memoization) and network-level improvements (payload compression, edge caching).",
-    },
-    {
-      id: "q4_scenario",
-      phase: "scenario",
-      phaseLabel: "Situational & Engineering Judgment",
-      question: `Imagine you discover a critical regression right before a scheduled production release, but product stakeholders are eager to ship. How do you evaluate the risk and communicate your decision with the team?`,
-      contextHint:
-        "Demonstrate engineering maturity, risk triage, rollback strategies, and stakeholder communication.",
-      expectedKeywords: [
-        "risk",
-        "stakeholder",
-        "triage",
-        "rollback",
-        "severity",
-        "testing",
-        "communication",
-      ],
-      idealAnswerOutline:
-        "Triage bug severity, evaluate blast radius, communicate transparently with stakeholders offering pragmatic alternatives (feature flags, hotfix timeline), and document root cause.",
-    },
-    {
-      id: "q5_closing",
-      phase: "closing",
-      phaseLabel: "Engineering Growth & Wrap-up",
-      question: `Thank you for those insights. As our final question: what is a recent technical paradigm, library, or engineering practice you have explored, and how does it influence how you write software today?`,
-      contextHint:
-        "Show genuine technical curiosity, continuous learning, and practical evaluation of new tech.",
-      expectedKeywords: [
-        "learning",
-        "explored",
-        "pattern",
-        "system",
-        "tool",
-        "productivity",
-        "future",
-      ],
-      idealAnswerOutline:
-        "Discusses an emerging practice (e.g., AI-assisted workflows, edge rendering, modern compiler toolchains) with critical reflection on its pros and cons.",
-    },
-  ];
+  return generateQuestionsFromDataset(targetJobTitle, jobPosting, verificationQuestions);
 }
 
 /**

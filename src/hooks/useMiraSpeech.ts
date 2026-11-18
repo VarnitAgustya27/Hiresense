@@ -175,6 +175,9 @@ export function useMiraSpeech(): {
 
   // Stop all playback, timers, network requests, and animation frames
   const hardStop = useCallback(() => {
+    phaseRef.current = "idle";
+    soundAudibleRef.current = false;
+
     if (activeAbortControllerRef.current) {
       activeAbortControllerRef.current.abort();
       activeAbortControllerRef.current = null;
@@ -228,6 +231,8 @@ export function useMiraSpeech(): {
 
   const cancel = useCallback(() => {
     const wasActive = phaseRef.current !== "idle" || soundAudibleRef.current;
+    phaseRef.current = "idle";
+    soundAudibleRef.current = false;
     hardStop();
     if (wasActive) {
       const id = ++requestIdRef.current;
@@ -306,6 +311,7 @@ export function useMiraSpeech(): {
       const id = ++requestIdRef.current;
       hardStop();
 
+      phaseRef.current = "preparing";
       setPhase("preparing");
       lastIndexRef.current = -1;
 
@@ -334,6 +340,7 @@ export function useMiraSpeech(): {
           }
 
           if (id === requestIdRef.current) {
+            phaseRef.current = "idle";
             setPhase("idle");
             if (result === "completed") {
               setProgress({
@@ -359,6 +366,7 @@ export function useMiraSpeech(): {
             console.error(`[TTS] more than one active playback (count=${activePlaybacksCount})`);
           }
 
+          phaseRef.current = "speaking";
           setPhase("speaking");
           try {
             opts.onStart?.();
