@@ -10,15 +10,11 @@ import {
   MicOff,
   Volume2,
   Clock,
-  Sparkles,
-  ShieldCheck,
   ArrowRight,
   RotateCcw,
-  RefreshCw,
   X,
   ChevronDown,
   ChevronUp,
-  User,
   Radio,
   Keyboard,
   AlertTriangle,
@@ -31,18 +27,20 @@ import {
   type InterviewScorecard,
 } from "@/lib/ai-interview";
 import { useMediaSession } from "@/hooks/useMediaSession";
+import { useMiraSpeech } from "@/hooks/useMiraSpeech";
 import { VoicePill, type VoiceState } from "@/components/interview/VoicePill";
 import {
   LiveSyncedTranscript,
   type ConversationTurn,
 } from "@/components/kokonutui/synced-transcript";
 import AI_Voice from "@/components/kokonutui/ai-voice";
-import { AppleActivityCard, type ActivityData } from "@/components/kokonutui/apple-activity-card";
+import { AppleActivityCard } from "@/components/kokonutui/apple-activity-card";
 import {
   recordInterviewStarted,
   recordInterviewProgress,
   recordInterviewCompleted,
 } from "@/lib/applications";
+import { cn } from "@/lib/utils";
 
 interface SpeechRecognitionResultItem {
   transcript: string;
@@ -111,25 +109,32 @@ export function AiInterviewRoom({
     preferredLanguage === "code_mixed" ? "hinglish" : preferredLanguage;
   const [language, setLanguage] = useState<"en" | "hi" | "hinglish">(normalizedLanguage);
 
-  // Questions and progress (initialized synchronously so interview is never blank)
+  // Questions in lobby (initialized synchronously so interview is never blank)
   const [questions, setQuestions] = useState<InterviewQuestion[]>(() =>
     generateInterviewQuestions(targetJobTitle, jobPosting, verificationQuestions),
   );
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [sessionId] = useState(() => `session_${Date.now()}`);
 
-  // Single media session from context (Phase 3)
+  // Frozen question snapshot used exclusively once interview starts
+  const [sessionQuestions, setSessionQuestions] = useState<InterviewQuestion[]>([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
+
+  // Dedicated single-owner Mira speech engine
   const {
-    stream,
-    isAcquired,
-    isAcquiring,
-    permissionStatus,
-    hasCamera,
-    hasMic,
-    audioLevel,
-    acquire,
-    release,
-  } = useMediaSession();
+    phase: speechPhase,
+    progress: speechProgress,
+    speak: speakSpeech,
+    prefetch: prefetchSpeech,
+    cancel: cancelSpeech,
+    isSpeaking: isSpeechSpeaking,
+  } = useMiraSpeech();
+
+  // Question reveal state: question text and hint revealed only after real sound starts
+  const [revealedQuestionId, setRevealedQuestionId] = useState<string | null>(null);
+  const [isPreparingOver150ms, setIsPreparingOver150ms] = useState(false);
+  const [voiceFailedNotice, setVoiceFailedNotice] = useState(false);
+
+  // Single media session from context
+  const { stream, isAcquired, hasCamera, hasMic, audioLevel, acquire, release } = useMediaSession();
 
   // Local device toggles
   const [isCameraActive, setIsCameraActive] = useState(true);
@@ -137,7 +142,6 @@ export function AiInterviewRoom({
 
   // Voice & Interview states
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
-  const [isTtsSpeaking, setIsTtsSpeaking] = useState(false);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [manualTextMode, setManualTextMode] = useState(false);
   const [silencePrompt, setSilencePrompt] = useState(false);
@@ -151,6 +155,7 @@ export function AiInterviewRoom({
   const [durations, setDurations] = useState<Record<string, number>>({});
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
   const [sessionSeconds, setSessionSeconds] = useState(0);
+  const sessionStartedRef = useRef<boolean>(false);
 
   // End Session Confirmation Modal
   const [showEndConfirm, setShowEndConfirm] = useState(false);
@@ -166,10 +171,7 @@ export function AiInterviewRoom({
   const shouldListenRef = useRef<boolean>(false);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activeAudioElemRef = useRef<HTMLAudioElement | null>(null);
-  const isTtsSpeakingRef = useRef<boolean>(false);
   const lastAskedQuestionIdRef = useRef<string | null>(null);
-  const speakTextRef = useRef<((text: string, onEnd?: () => void) => Promise<void>) | null>(null);
   const planFetchedRef = useRef<boolean>(false);
 
   // Callback ref for lobby video to ensure instant attachment on element mount
@@ -236,7 +238,7 @@ export function AiInterviewRoom({
     }
   }, [stage, stream, isCameraActive]);
 
-  // Plan generation on start (Phase 6) - strictly guarded to run once per session
+  // Plan generation on start - strictly guarded to run once per session while in lobby
   useEffect(() => {
     if (planFetchedRef.current) return;
     planFetchedRef.current = true;
@@ -284,11 +286,20 @@ export function AiInterviewRoom({
     };
   }, [targetJobTitle, jobPosting, verificationQuestions, language]);
 
-  // Session Timer
+  // Prefetch question 1 while candidate is reviewing the lobby
+  useEffect(() => {
+    if (stage === "lobby" && questions.length > 0) {
+      prefetchSpeech(questions[0].question, language);
+    }
+  }, [stage, questions, language, prefetchSpeech]);
+
+  // Session Timer: interval only increments once sessionStartedRef becomes true (on first onStart)
   useEffect(() => {
     if (stage !== "interview") return;
     const interval = setInterval(() => {
-      setSessionSeconds((prev) => prev + 1);
+      if (sessionStartedRef.current) {
+        setSessionSeconds((prev) => prev + 1);
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, [stage]);
@@ -349,21 +360,12 @@ export function AiInterviewRoom({
       };
 
       recognition.onresult = (event: BrowserSpeechRecognitionEvent) => {
-        // Reset silence timer on speech
         setSilencePrompt(false);
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
-        // Barge-in check (Phase 4.4): if TTS is speaking, interrupt it within 150ms
-        if (isTtsSpeakingRef.current) {
-          if (activeAudioElemRef.current) {
-            activeAudioElemRef.current.pause();
-            activeAudioElemRef.current = null;
-          }
-          if ("speechSynthesis" in window) {
-            window.speechSynthesis.cancel();
-          }
-          setIsTtsSpeaking(false);
-          isTtsSpeakingRef.current = false;
+        // Barge-in check: if Mira is currently speaking, cancel immediately
+        if (isSpeechSpeaking()) {
+          cancelSpeech();
           setVoiceState("listening");
         }
 
@@ -385,16 +387,18 @@ export function AiInterviewRoom({
         if (combined) {
           setCurrentAnswer(combined);
 
-          // Update candidate turn in SyncedTranscript
           setTurns((prev) => {
             const lastTurn = prev[prev.length - 1];
             if (lastTurn && lastTurn.speaker === "candidate") {
+              setActiveTurnId(lastTurn.id);
               return [...prev.slice(0, -1), { ...lastTurn, text: combined, isStreaming: true }];
             } else {
+              const candTurnId = `cand_${Date.now()}`;
+              setActiveTurnId(candTurnId);
               return [
                 ...prev,
                 {
-                  id: `cand_${Date.now()}`,
+                  id: candTurnId,
                   speaker: "candidate",
                   speakerName: candidateName,
                   text: combined,
@@ -434,171 +438,154 @@ export function AiInterviewRoom({
     } catch (err) {
       console.warn("Speech recognition initialization fallback:", err);
     }
-  }, [isMicMuted, stage, language, candidateName]);
+  }, [isMicMuted, stage, language, candidateName, isSpeechSpeaking, cancelSpeech]);
 
-  // Fallback to browser SpeechSynthesis
-  const fallbackToWebSpeech = useCallback(
-    (text: string, onEndCallback?: () => void) => {
-      if (!("speechSynthesis" in window)) {
-        setIsTtsSpeaking(false);
-        setVoiceState("listening");
-        startSpeechRecognition();
-        if (onEndCallback) onEndCallback();
-        return;
-      }
-
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.05;
-
-      const voices = window.speechSynthesis.getVoices();
-      const preferredVoice =
-        voices.find((v) => v.lang.includes("en-IN") || v.name.toLowerCase().includes("india")) ||
-        voices.find((v) => v.lang.includes("en-US") && v.name.includes("Natural")) ||
-        voices.find((v) => v.lang.includes("en"));
-
-      if (preferredVoice) utterance.voice = preferredVoice;
-
-      utterance.onend = () => {
-        setIsTtsSpeaking(false);
-        isTtsSpeakingRef.current = false;
-        setVoiceState("listening");
-        startSpeechRecognition();
-        if (onEndCallback) onEndCallback();
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = setTimeout(() => setSilencePrompt(true), 4000);
-      };
-
-      utterance.onerror = () => {
-        setIsTtsSpeaking(false);
-        isTtsSpeakingRef.current = false;
-        setVoiceState("listening");
-        startSpeechRecognition();
-      };
-
-      window.speechSynthesis.speak(utterance);
-    },
-    [startSpeechRecognition],
-  );
-
-  // Text-To-Speech (Mira voice synthesis with server fallback to browser)
-  const speakText = useCallback(
-    async (text: string, onEndCallback?: () => void) => {
+  // Clean unmount safety
+  useEffect(() => {
+    return () => {
+      cancelSpeech();
       stopSpeechRecognition();
-      setVoiceState("speaking");
-      setIsTtsSpeaking(true);
-      isTtsSpeakingRef.current = true;
-      setSilencePrompt(false);
+    };
+  }, [cancelSpeech, stopSpeechRecognition]);
 
-      // Attempt server-side synthesis
-      try {
-        const resp = await fetch("/api/speech/synthesize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, language }),
-        });
+  // Track preparation state for the current question
+  const currentQ = sessionQuestions[currentIdx];
+  const isPreparing =
+    stage === "interview" && Boolean(currentQ) && revealedQuestionId !== currentQ?.id;
 
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data.audioBase64 && !data.useBrowserFallback) {
-            const audio = new Audio(`data:${data.mimeType};base64,${data.audioBase64}`);
-            activeAudioElemRef.current = audio;
-
-            audio.onended = () => {
-              setIsTtsSpeaking(false);
-              isTtsSpeakingRef.current = false;
-              setVoiceState("listening");
-              activeAudioElemRef.current = null;
-              startSpeechRecognition();
-              if (onEndCallback) onEndCallback();
-              // Start 4s silence detection
-              if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-              silenceTimerRef.current = setTimeout(() => setSilencePrompt(true), 4000);
-            };
-
-            audio.onerror = () => {
-              fallbackToWebSpeech(text, onEndCallback);
-            };
-
-            await audio.play();
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn("Speech synthesis API fallback:", err);
-      }
-
-      // Fallback to Web Speech API
-      fallbackToWebSpeech(text, onEndCallback);
-    },
-    [language, startSpeechRecognition, stopSpeechRecognition, fallbackToWebSpeech],
-  );
-
+  // Anti-flicker: only show skeleton if preparing lasts longer than 150ms
   useEffect(() => {
-    speakTextRef.current = speakText;
-  }, [speakText]);
+    if (!isPreparing) {
+      setIsPreparingOver150ms(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setIsPreparingOver150ms(true);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [isPreparing]);
 
-  // Handle Question advance & rotation (guaranteed single trigger per question)
+  // Handle Question advance & rotation (strictly depends only on [stage, currentIdx])
   useEffect(() => {
-    if (stage !== "interview" || questions.length === 0 || !questions[currentIdx]) {
+    if (stage !== "interview" || sessionQuestions.length === 0 || !sessionQuestions[currentIdx]) {
       return;
     }
 
-    const q = questions[currentIdx];
+    const q = sessionQuestions[currentIdx];
 
-    // Strictly guard against asking or adding duplicate messages for the same question
-    if (lastAskedQuestionIdRef.current === q.id) {
-      return;
-    }
-    lastAskedQuestionIdRef.current = q.id;
-
+    // Reset per-question UI states
+    setRevealedQuestionId(null);
+    setVoiceFailedNotice(false);
     setCurrentAnswer("");
-    setQuestionStartTime(Date.now());
     stopSpeechRecognition();
-
-    const turnId = `mira_q_${q.id}`;
-    setActiveTurnId(turnId);
-
-    // Append Mira's question to transcript idempotently
-    setTurns((prev) => {
-      if (prev.some((t) => t.id === turnId)) {
-        return prev;
-      }
-      return [
-        ...prev,
-        {
-          id: turnId,
-          speaker: "mira",
-          speakerName: "Mira",
-          text: q.question,
-          isStreaming: false,
-        },
-      ];
-    });
+    setSilencePrompt(false);
+    setVoiceState("thinking");
 
     const timer = setTimeout(() => {
-      speakTextRef.current?.(q.question);
+      lastAskedQuestionIdRef.current = q.id;
+
+      speakSpeech(q.question, {
+        language,
+        onStart: () => {
+          // Real sound is audible now! Reveal question and update conversation turn
+          setRevealedQuestionId(q.id);
+          setVoiceState("speaking");
+
+          if (!sessionStartedRef.current) {
+            sessionStartedRef.current = true;
+          }
+          setQuestionStartTime(Date.now());
+
+          const turnId = `mira_q_${q.id}`;
+          setActiveTurnId(turnId);
+          setTurns((prev) => {
+            if (prev.some((t) => t.id === turnId)) {
+              return prev;
+            }
+            return [
+              ...prev,
+              {
+                id: turnId,
+                speaker: "mira",
+                speakerName: "Mira",
+                text: q.question,
+                isStreaming: false,
+              },
+            ];
+          });
+
+          // Prefetch next question
+          if (currentIdx + 1 < sessionQuestions.length) {
+            prefetchSpeech(sessionQuestions[currentIdx + 1].question, language);
+          }
+        },
+      }).then((result) => {
+        if (result === "completed") {
+          setVoiceState("listening");
+          startSpeechRecognition();
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => setSilencePrompt(true), 4000);
+        } else if (result === "failed") {
+          // Graceful degradation: both engines failed
+          setRevealedQuestionId(q.id);
+          setVoiceFailedNotice(true);
+          setManualTextMode(true);
+          setVoiceState("idle");
+
+          if (!sessionStartedRef.current) {
+            sessionStartedRef.current = true;
+          }
+          setQuestionStartTime(Date.now());
+
+          const turnId = `mira_q_${q.id}`;
+          setActiveTurnId(turnId);
+          setTurns((prev) => {
+            if (prev.some((t) => t.id === turnId)) {
+              return prev;
+            }
+            return [
+              ...prev,
+              {
+                id: turnId,
+                speaker: "mira",
+                speakerName: "Mira",
+                text: q.question,
+                isStreaming: false,
+              },
+            ];
+          });
+        }
+      });
     }, 400);
 
     return () => {
       clearTimeout(timer);
     };
-  }, [stage, currentIdx, questions, stopSpeechRecognition]);
+  }, [stage, currentIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Start interview from lobby
+  // Start interview from lobby: snapshot questions into sessionQuestions
   const handleJoinInterview = async () => {
     lastAskedQuestionIdRef.current = null;
+    sessionStartedRef.current = false;
+    cancelSpeech();
+    stopSpeechRecognition();
+
     if (!isAcquired) {
       await acquire().catch(() => {});
     }
+
+    const snapshot = [...questions];
+    setSessionQuestions(snapshot);
     setStage("interview");
     setCurrentIdx(0);
     setSessionSeconds(0);
     setAnswers({});
     setDurations({});
     setTurns([]);
-    recordInterviewStarted(userId, jobId, sessionId);
+    setRevealedQuestionId(null);
+    setVoiceFailedNotice(false);
+
+    recordInterviewStarted(userId, jobId, snapshot.length);
   };
 
   // Toggle Camera
@@ -609,14 +596,6 @@ export function AiInterviewRoom({
       stream.getVideoTracks().forEach((track) => {
         track.enabled = nextState;
       });
-    }
-    if (videoRef.current && stream) {
-      if (videoRef.current.srcObject !== stream) {
-        videoRef.current.srcObject = stream;
-      }
-      if (nextState) {
-        videoRef.current.play().catch(() => {});
-      }
     }
   };
 
@@ -636,11 +615,29 @@ export function AiInterviewRoom({
     }
   };
 
-  // Repeat current question
+  // Repeat current question: replay audio without appending a duplicate turn
   const handleRepeatQuestion = () => {
-    if (questions[currentIdx]) {
-      speakText(questions[currentIdx].question);
-    }
+    if (isPreparing) return;
+    const currentQuestion = sessionQuestions[currentIdx];
+    if (!currentQuestion) return;
+
+    cancelSpeech();
+    stopSpeechRecognition();
+    setVoiceState("thinking");
+
+    speakSpeech(currentQuestion.question, {
+      language,
+      onStart: () => {
+        setVoiceState("speaking");
+      },
+    }).then((result) => {
+      if (result === "completed") {
+        setVoiceState("listening");
+        startSpeechRecognition();
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = setTimeout(() => setSilencePrompt(true), 4000);
+      }
+    });
   };
 
   // Finalize scorecard and end session
@@ -648,16 +645,14 @@ export function AiInterviewRoom({
     allAnswers: Record<string, string>,
     allDurations: Record<string, number>,
   ) => {
+    cancelSpeech();
     stopSpeechRecognition();
-    if (activeAudioElemRef.current) {
-      activeAudioElemRef.current.pause();
-      activeAudioElemRef.current = null;
-    }
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-
     setVoiceState("thinking");
+
+    // Finalize all candidate turns
+    setTurns((prev) =>
+      prev.map((t) => (t.speaker === "candidate" ? { ...t, isStreaming: false } : t)),
+    );
 
     let finalScorecard: InterviewScorecard | null = null;
 
@@ -668,7 +663,7 @@ export function AiInterviewRoom({
         body: JSON.stringify({
           candidateName,
           targetJobTitle,
-          questions,
+          questions: sessionQuestions,
           answers: allAnswers,
           durations: allDurations,
           language,
@@ -686,72 +681,65 @@ export function AiInterviewRoom({
       finalScorecard = evaluateInterviewSession(
         candidateName,
         targetJobTitle,
-        questions,
+        sessionQuestions,
         allAnswers,
         allDurations,
       );
     }
 
-    // Record complete application progress
     recordInterviewCompleted(userId, jobId, finalScorecard);
-
     setScorecard(finalScorecard);
     setStage("scorecard");
   };
 
   // Advance to Next Question
   const handleNextQuestion = async () => {
-    stopSpeechRecognition();
-    if (activeAudioElemRef.current) {
-      activeAudioElemRef.current.pause();
-      activeAudioElemRef.current = null;
-    }
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
+    if (isPreparing) return;
 
-    const currentQ = questions[currentIdx];
-    if (!currentQ) return;
+    cancelSpeech();
+    stopSpeechRecognition();
+
+    // Mark active streaming turns as completed
+    setTurns((prev) =>
+      prev.map((t) => (t.speaker === "candidate" ? { ...t, isStreaming: false } : t)),
+    );
+
+    const currentQuestion = sessionQuestions[currentIdx];
+    if (!currentQuestion) return;
 
     const timeSpent = Math.max(5, Math.round((Date.now() - questionStartTime) / 1000));
     const finalAnswer = currentAnswer.trim();
 
-    const updatedAnswers = { ...answers, [currentQ.id]: finalAnswer };
-    const updatedDurations = { ...durations, [currentQ.id]: timeSpent };
+    const updatedAnswers = { ...answers, [currentQuestion.id]: finalAnswer };
+    const updatedDurations = { ...durations, [currentQuestion.id]: timeSpent };
 
     setAnswers(updatedAnswers);
     setDurations(updatedDurations);
 
-    // Autosave progress (Phase 4.3)
-    recordInterviewProgress(userId, jobId, {
-      sessionId,
-      currentQuestion: currentIdx,
-      totalQuestions: questions.length,
-    });
+    recordInterviewProgress(userId, jobId, currentIdx + 1, sessionQuestions.length);
 
-    if (currentIdx < questions.length - 1) {
-      setVoiceState("thinking");
-      setTimeout(() => {
-        setCurrentIdx((prev) => prev + 1);
-      }, 500);
+    if (currentIdx < sessionQuestions.length - 1) {
+      setCurrentIdx((prev) => prev + 1);
     } else {
-      // Completed last question
       completeInterviewEvaluation(updatedAnswers, updatedDurations);
     }
   };
 
   // Confirm End Interview early
   const handleConfirmEndEarly = () => {
+    cancelSpeech();
+    stopSpeechRecognition();
     setShowEndConfirm(false);
-    const currentQ = questions[currentIdx];
+
+    const currentQuestion = sessionQuestions[currentIdx];
     const finalAnswer = currentAnswer.trim();
     const updatedAnswers = {
       ...answers,
-      [currentQ?.id || `q_${currentIdx}`]: finalAnswer,
+      [currentQuestion?.id || `q_${currentIdx}`]: finalAnswer,
     };
     const updatedDurations = {
       ...durations,
-      [currentQ?.id || `q_${currentIdx}`]: Math.max(
+      [currentQuestion?.id || `q_${currentIdx}`]: Math.max(
         5,
         Math.round((Date.now() - questionStartTime) / 1000),
       ),
@@ -762,19 +750,34 @@ export function AiInterviewRoom({
 
   // Retake interview
   const handleRetake = () => {
+    cancelSpeech();
+    stopSpeechRecognition();
     lastAskedQuestionIdRef.current = null;
+    sessionStartedRef.current = false;
     setStage("lobby");
     setCurrentIdx(0);
+    setSessionSeconds(0);
     setAnswers({});
     setDurations({});
     setTurns([]);
+    setRevealedQuestionId(null);
+    setVoiceFailedNotice(false);
   };
 
   // Done button navigation
   const handleDone = () => {
+    cancelSpeech();
+    stopSpeechRecognition();
     release();
     onClose();
     navigate({ to: "/dashboard" });
+  };
+
+  // Close handler for lobby X button
+  const handleClose = () => {
+    cancelSpeech();
+    stopSpeechRecognition();
+    onClose();
   };
 
   if (!mounted) return null;
@@ -797,27 +800,26 @@ export function AiInterviewRoom({
                     Mira AI Interview Room.
                   </h3>
                   <p className="text-[12px] font-[450] text-[#8a8a8a]">
-                    Pre-session readiness check for{" "}
-                    <span className="text-[#f5f5f5] font-[600]">{targetJobTitle}</span>
+                    Pre-session readiness check for {targetJobTitle}
                   </p>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={onClose}
-                className="text-[#8a8a8a] hover:text-[#f5f5f5] p-1.5 transition-colors"
-                title="Exit interview setup"
+                onClick={handleClose}
+                className="rounded-full p-2 text-[#8a8a8a] hover:bg-[#1a1a1a] hover:text-[#f5f5f5] transition-colors"
+                aria-label="Close"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center flex-1">
-              {/* Left: Square Camera Preview Mirror */}
-              <div className="rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-5 flex flex-col items-center justify-center space-y-3 relative overflow-hidden">
-                <div className="relative w-full aspect-square max-w-[280px] sm:max-w-[310px] rounded-[18px] bg-[#1a1a1a] overflow-hidden flex items-center justify-center border border-[rgba(255,255,255,0.08)] shadow-inner">
-                  {hasCamera && stream && isCameraActive ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center py-4">
+              {/* Left: Video Self-View */}
+              <div className="flex flex-col items-center space-y-3">
+                <div className="relative w-full max-w-[310px] aspect-video rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.10)] overflow-hidden flex items-center justify-center">
+                  {hasCamera && isCameraActive && stream ? (
                     <video
                       ref={setLobbyVideo}
                       autoPlay
@@ -826,57 +828,24 @@ export function AiInterviewRoom({
                       className="w-full h-full object-cover"
                       style={{ transform: "scaleX(-1)" }}
                     />
-                  ) : hasMic && stream && !hasCamera ? (
-                    /* Audio-only fallback (Phase 3.4) */
-                    <div className="flex flex-col items-center justify-center space-y-3 p-4 text-center">
-                      <div className="h-20 w-20 rounded-full bg-[#141414] border border-[rgba(255,255,255,0.15)] flex items-center justify-center text-[22px] font-[700] text-[#f5f5f5]">
-                        {candidateName
-                          .split(" ")
-                          .map((n) => n[0])
-                          .slice(0, 2)
-                          .join("")
-                          .toUpperCase()}
-                      </div>
-                      <span className="text-[11px] font-[600] px-3 py-1 rounded-full bg-[#141414] text-[#8a8a8a] border border-[rgba(255,255,255,0.10)]">
-                        Audio only mode
-                      </span>
-                    </div>
                   ) : (
-                    <video
-                      ref={setLobbyVideo}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                      style={{ transform: "scaleX(-1)" }}
-                    />
-                  )}
-
-                  {(!isAcquired || !stream?.active) && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3 bg-[#141414]/90 backdrop-blur-sm p-4 text-center z-10">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1a1a1a] border border-[rgba(255,255,255,0.10)] text-[#8a8a8a]">
-                        <VideoOff size={20} />
-                      </div>
-
-                      <div className="space-y-1">
-                        <p className="text-[13px] font-[650] text-[#f5f5f5]">
-                          {isAcquiring ? "Connecting media devices..." : "Camera & mic standby"}
-                        </p>
-                        <p className="text-[11px] text-[#8a8a8a] max-w-[210px] leading-relaxed">
-                          {permissionStatus === "denied"
-                            ? "Camera or microphone blocked. Allow permissions in the address bar and tap retry."
-                            : "Enable camera & microphone to preview video before entering."}
-                        </p>
-                      </div>
-
+                    <div className="flex flex-col items-center justify-center space-y-2 text-[#8a8a8a]">
+                      <VideoOff size={28} />
+                      <span className="text-[12px]">
+                        {!hasCamera ? "No camera detected" : "Camera turned off"}
+                      </span>
                       <button
                         type="button"
-                        onClick={() => acquire()}
-                        disabled={isAcquiring}
-                        className="inline-flex h-8 items-center gap-1.5 px-4 rounded-full bg-[#f5f5f5] text-[12px] font-[600] text-[#0a0a0a] hover:bg-[#e0e0e0] transition-colors disabled:opacity-50"
+                        onClick={() => {
+                          if (!stream) {
+                            acquire().catch(() => {});
+                          } else {
+                            handleToggleCamera();
+                          }
+                        }}
+                        className="px-3 py-1 rounded-full bg-[#1a1a1a] text-[11px] text-[#f5f5f5] border border-white/10 hover:bg-[#262626] transition-colors"
                       >
-                        <RefreshCw size={12} className={isAcquiring ? "animate-spin" : ""} />
-                        <span>{isAcquiring ? "Connecting..." : "Enable camera & mic"}</span>
+                        Enable camera
                       </button>
                     </div>
                   )}
@@ -971,19 +940,19 @@ export function AiInterviewRoom({
         )}
 
         {/* Fallback loader if questions are ever empty */}
-        {stage === "interview" && (questions.length === 0 || !questions[currentIdx]) && (
-          <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-4 text-center my-auto">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[rgba(255,255,255,0.15)] border-t-[#f5f5f5]" />
-            <p className="text-[14px] text-[#8a8a8a]">Preparing your interview session...</p>
-          </div>
-        )}
+        {stage === "interview" &&
+          (sessionQuestions.length === 0 || !sessionQuestions[currentIdx]) && (
+            <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-4 text-center my-auto">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[rgba(255,255,255,0.15)] border-t-[#f5f5f5]" />
+              <p className="text-[14px] text-[#8a8a8a]">Preparing your interview session...</p>
+            </div>
+          )}
 
         {/* ========================================================= */}
-        {/* STAGE 2: REDESIGNED SPLIT INTERVIEW SCREEN (Phase 4 & 5)   */}
+        {/* STAGE 2: REDESIGNED SPLIT INTERVIEW SCREEN                */}
         {/* ========================================================= */}
-        {stage === "interview" && questions.length > 0 && questions[currentIdx] && (
+        {stage === "interview" && sessionQuestions.length > 0 && currentQ && (
           <div className="flex-1 flex flex-col space-y-6">
-            {/* Desktop Split Layout: 5fr Media Column / 7fr Conversation Column */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Left: Media Column (5fr) */}
               <div className="lg:col-span-5 space-y-4">
@@ -1000,28 +969,33 @@ export function AiInterviewRoom({
                           <span className="text-[11px] text-[#8a8a8a]">· Technical Panel</span>
                         </div>
                         <span className="text-[11px] text-[#8a8a8a] block">
-                          {voiceState === "speaking"
-                            ? "Speaking question..."
-                            : voiceState === "thinking"
-                              ? "Reflecting on answer..."
-                              : "Listening to candidate..."}
+                          {isPreparing
+                            ? "Preparing the question..."
+                            : voiceState === "speaking"
+                              ? "Speaking question..."
+                              : voiceState === "thinking"
+                                ? "Reflecting on answer..."
+                                : "Listening to candidate..."}
                         </span>
                       </div>
                     </div>
 
-                    {/* Wispr-flow VoicePill (Phase 5) */}
                     <VoicePill
                       state={voiceState}
                       audioLevel={audioLevel}
-                      isTtsSpeaking={isTtsSpeaking}
+                      isTtsSpeaking={speechPhase === "speaking"}
                     />
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-[rgba(255,255,255,0.06)] text-[12px]">
                     <button
                       type="button"
+                      disabled={isPreparing}
                       onClick={handleRepeatQuestion}
-                      className="inline-flex items-center gap-1.5 text-[#8a8a8a] hover:text-[#f5f5f5] transition-colors"
+                      className={cn(
+                        "inline-flex items-center gap-1.5 text-[#8a8a8a] transition-colors",
+                        isPreparing ? "opacity-50 cursor-not-allowed" : "hover:text-[#f5f5f5]",
+                      )}
                     >
                       <Volume2 size={13} />
                       <span>Repeat question</span>
@@ -1045,7 +1019,6 @@ export function AiInterviewRoom({
                         style={{ transform: "scaleX(-1)" }}
                       />
                     ) : hasMic && !hasCamera ? (
-                      /* Audio-only in interview (Rule 3.4) */
                       <div className="flex flex-col items-center justify-center space-y-2">
                         <div className="h-16 w-16 rounded-full bg-[#141414] border border-[rgba(255,255,255,0.15)] flex items-center justify-center text-[18px] font-[700] text-[#f5f5f5]">
                           {candidateName
@@ -1081,13 +1054,11 @@ export function AiInterviewRoom({
                       </div>
                     )}
 
-                    {/* Candidate Name Badge */}
                     <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[11px] text-[#f5f5f5] font-[500] border border-white/10 flex items-center gap-1.5">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       <span>You · {candidateName}</span>
                     </div>
 
-                    {/* Action Controls Overlay */}
                     <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
                       <button
                         type="button"
@@ -1116,13 +1087,11 @@ export function AiInterviewRoom({
                       </button>
                     </div>
 
-                    {/* Non-diagnostic proctoring tag */}
                     <div className="absolute bottom-2.5 left-2.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] text-[#8a8a8a] border border-white/10">
                       Proctoring: Active & Monitored
                     </div>
                   </div>
 
-                  {/* Mic Level Bar */}
                   <div className="flex items-center justify-between text-[11px] text-[#8a8a8a] px-1">
                     <span className="flex items-center gap-1.5">
                       <Mic
@@ -1152,7 +1121,7 @@ export function AiInterviewRoom({
                     </span>
 
                     <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#141414] text-[12px] font-[600] text-[#0066ff] border border-[rgba(255,255,255,0.08)]">
-                      Question {currentIdx + 1} of {questions.length}
+                      Question {currentIdx + 1} of {sessionQuestions.length}
                     </span>
                   </div>
 
@@ -1170,18 +1139,44 @@ export function AiInterviewRoom({
                   <div className="flex items-center gap-2">
                     <span className="h-1.5 w-1.5 rounded-full bg-[#f5f5f5]" />
                     <span className="text-[12px] font-[600] text-[#8a8a8a]">
-                      {questions[currentIdx].phaseLabel}
+                      {currentQ.phaseLabel}
                     </span>
                   </div>
-                  <h3 className="text-[20px] sm:text-[22px] font-[650] text-[#f5f5f5] tracking-tight leading-snug">
-                    {questions[currentIdx].question}
-                  </h3>
-                  <p className="text-[13px] text-[#707070] italic">
-                    Hint: {questions[currentIdx].contextHint}
-                  </p>
+
+                  {isPreparing ? (
+                    isPreparingOver150ms ? (
+                      <div
+                        role="status"
+                        aria-live="polite"
+                        aria-busy="true"
+                        className="space-y-2.5 py-1 min-h-[132px]"
+                      >
+                        <span className="sr-only">Mira is preparing the question.</span>
+                        <div className="h-6 w-[92%] rounded-full bg-[#1a1a1a] animate-pulse motion-reduce:animate-none" />
+                        <div className="h-6 w-[78%] rounded-full bg-[#1a1a1a] animate-pulse motion-reduce:animate-none" />
+                        <div className="h-6 w-[55%] rounded-full bg-[#1a1a1a] animate-pulse motion-reduce:animate-none" />
+                      </div>
+                    ) : (
+                      <div className="min-h-[132px] py-1" aria-hidden="true" />
+                    )
+                  ) : (
+                    <div className="min-h-[132px] space-y-2 py-1">
+                      <h3 className="text-[20px] sm:text-[22px] font-[650] text-[#f5f5f5] tracking-tight leading-snug">
+                        {currentQ.question}
+                      </h3>
+                      <p className="text-[13px] text-[#707070] italic">
+                        Hint: {currentQ.contextHint}
+                      </p>
+                      {voiceFailedNotice && (
+                        <p className="text-[12px] text-[#8a8a8a] mt-2">
+                          Voice is unavailable. Read the question and answer by typing or speaking.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Synced Transcript Component (Kokonutui live transcript) */}
+                {/* Synced Transcript Component */}
                 <div className="rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-4 max-h-[260px] overflow-hidden flex flex-col">
                   <span className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider mb-2 block">
                     Live Transcript
@@ -1190,11 +1185,21 @@ export function AiInterviewRoom({
                     turns={turns}
                     candidateName={candidateName}
                     activeTurnId={activeTurnId}
+                    speechProgress={
+                      speechPhase === "speaking" || speechProgress.isComplete
+                        ? {
+                            turnId: activeTurnId || "",
+                            wordIndex: speechProgress.wordIndex,
+                            isComplete: speechProgress.isComplete,
+                          }
+                        : undefined
+                    }
+                    isPreparingNextQuestion={isPreparing}
                     className="flex-1"
                   />
                 </div>
 
-                {/* Silence prompt (Phase 4.5 VAD) */}
+                {/* Silence prompt */}
                 {silencePrompt && (
                   <div className="rounded-[14px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.06)] px-4 py-2 text-[12px] text-[#8a8a8a] text-center animate-in fade-in">
                     Take your time, or tap Submit when ready.
@@ -1247,11 +1252,17 @@ export function AiInterviewRoom({
 
                     <button
                       type="button"
+                      disabled={isPreparing}
                       onClick={handleNextQuestion}
-                      className="inline-flex h-11 items-center gap-2 rounded-full bg-[#f5f5f5] px-7 text-[14px] font-[600] text-[#0a0a0a] hover:bg-[#e0e0e0] transition-colors active:scale-[0.98]"
+                      className={cn(
+                        "inline-flex h-11 items-center gap-2 rounded-full px-7 text-[14px] font-[600] transition-colors",
+                        isPreparing
+                          ? "bg-[#1a1a1a] text-[#707070] opacity-50 cursor-not-allowed"
+                          : "bg-[#f5f5f5] text-[#0a0a0a] hover:bg-[#e0e0e0] active:scale-[0.98]",
+                      )}
                     >
                       <span>
-                        {currentIdx < questions.length - 1
+                        {currentIdx < sessionQuestions.length - 1
                           ? "Submit & Next Question"
                           : "Submit & Complete"}
                       </span>
@@ -1262,7 +1273,7 @@ export function AiInterviewRoom({
               </div>
             </div>
 
-            {/* End Session Confirmation Modal (Phase 4.2) */}
+            {/* End Session Confirmation Modal */}
             {showEndConfirm && (
               <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
                 <div className="max-w-md w-full rounded-[24px] bg-[#141414] border border-[rgba(255,255,255,0.12)] p-6 space-y-4 shadow-2xl">
@@ -1302,11 +1313,10 @@ export function AiInterviewRoom({
         )}
 
         {/* ========================================================= */}
-        {/* STAGE 3: RESULTS SCREEN DECLUTTER (Phase 7)               */}
+        {/* STAGE 3: RESULTS SCREEN DECLUTTER                         */}
         {/* ========================================================= */}
         {stage === "scorecard" && scorecard && (
           <div className="flex-1 max-w-[1100px] w-full mx-auto space-y-8 animate-in fade-in duration-300">
-            {/* Header: Lead & Actions */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[rgba(255,255,255,0.08)] pb-5">
               <div>
                 <span className="text-[12px] font-[600] text-[#8a8a8a] block mb-1">
@@ -1343,7 +1353,6 @@ export function AiInterviewRoom({
               </div>
             </div>
 
-            {/* Apple Activity Card with 3 Concentric Monochrome Rings (Phase 7.2) */}
             <AppleActivityCard
               title="Competency Activity Rings"
               overallScore={scorecard.overallScore}
@@ -1378,7 +1387,6 @@ export function AiInterviewRoom({
               ]}
             />
 
-            {/* Summary Row: 3 Clean Cards (Strengths, Gaps, Human Verification) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-5 space-y-2.5">
                 <span className="text-[12px] font-[650] text-[#f5f5f5] block">
@@ -1420,7 +1428,6 @@ export function AiInterviewRoom({
               </div>
             </div>
 
-            {/* Accordion: Question-by-Question Audit & Transcripts (Phase 7.4) */}
             <div className="space-y-4">
               <h3 className="text-[18px] font-[650] text-[#f5f5f5]">
                 Question-by-Question Audit & Transcripts.
@@ -1475,7 +1482,6 @@ export function AiInterviewRoom({
 
                       {isExpanded && (
                         <div className="pt-3 border-t border-[rgba(255,255,255,0.06)] space-y-3.5 text-[13px] animate-in fade-in duration-150">
-                          {/* Transcribed Candidate Answer with verbatim quote highlighting */}
                           <div className="space-y-1">
                             <span className="text-[11px] font-[600] text-[#8a8a8a] block">
                               Transcribed Candidate Response:
@@ -1491,7 +1497,6 @@ export function AiInterviewRoom({
                             </p>
                           </div>
 
-                          {/* Metric breakdown row */}
                           <div className="grid grid-cols-3 gap-2.5 text-center">
                             <div className="rounded-[12px] bg-[#1a1a1a] p-2.5 border border-[rgba(255,255,255,0.06)]">
                               <span className="text-[11px] text-[#8a8a8a] block">Technical</span>
@@ -1513,7 +1518,6 @@ export function AiInterviewRoom({
                             </div>
                           </div>
 
-                          {/* Strengths and Recommendations */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
                             <div className="space-y-1">
                               <span className="font-[600] text-emerald-400 block">
@@ -1538,7 +1542,6 @@ export function AiInterviewRoom({
                             </div>
                           </div>
 
-                          {/* Mira's Benchmark Guide */}
                           <div className="p-3.5 rounded-[14px] bg-[#1a1a1a]/60 border border-[rgba(255,255,255,0.06)] space-y-1 text-[12px]">
                             <span className="font-[600] text-[#f5f5f5] block">
                               Mira's Benchmark Guide:
