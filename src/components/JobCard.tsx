@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bookmark, MapPin } from "lucide-react";
+import { Bookmark, MapPin, Users } from "lucide-react";
 import type { Job, StructuredJobListing } from "@/types/database.types";
 import { CompanyLogo } from "@/components/CompanyLogo";
 import { type ApplicationRecord, getApplicationCardStatus } from "@/lib/applications";
@@ -14,6 +14,7 @@ interface JobCardProps {
   onToggleBookmark?: (jobId: string) => void;
   onEdit?: (job: Job) => void;
   onToggleStatus?: (job: Job) => void;
+  applicantCount?: number;
 }
 
 export function JobCard({
@@ -24,6 +25,7 @@ export function JobCard({
   application = null,
   isBookmarked: externalBookmarked,
   onToggleBookmark,
+  applicantCount,
 }: JobCardProps) {
   const [internalBookmarked, setInternalBookmarked] = useState(false);
   const isBookmarked = externalBookmarked !== undefined ? externalBookmarked : internalBookmarked;
@@ -101,6 +103,26 @@ export function JobCard({
               }`}
             >
               {isDraft ? "Draft" : "Published"}
+            </span>
+          )}
+
+          {isRecruiter && (
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-[600] border transition-all ${
+                applicantCount !== undefined && applicantCount > 0
+                  ? "bg-[#1f1f1f] text-[#f5f5f5] border-[#f5f5f5]/30 font-[650]"
+                  : "bg-[#1a1a1a] text-[#8a8a8a] border-[rgba(255,255,255,0.08)]"
+              }`}
+            >
+              <Users
+                size={11}
+                className={applicantCount !== undefined && applicantCount > 0 ? "text-[#f5f5f5]" : "text-[#707070]"}
+              />
+              <span>
+                {applicantCount !== undefined
+                  ? `${applicantCount} Candidate${applicantCount !== 1 ? "s" : ""}`
+                  : "Applicants"}
+              </span>
             </span>
           )}
         </div>

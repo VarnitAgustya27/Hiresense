@@ -49,6 +49,8 @@ import {
   recordInterviewProgress,
   recordInterviewCompleted,
 } from "@/lib/applications";
+import { saveInterviewScorecardServerFn } from "@/lib/interview-sync";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 interface AiInterviewRoomProps {
@@ -489,12 +491,69 @@ export function AiInterviewRoom({
       );
     }
 
+    if (finalScorecard) {
+      (finalScorecard as any).candidateName = candidateName;
+    }
+
     const elapsed = Date.now() - startTime;
     if (elapsed < 2500) {
       await new Promise((r) => setTimeout(r, 2500 - elapsed));
     }
 
     recordInterviewCompleted(userId, jobId, finalScorecard);
+
+    // Persist completed interview scorecard to Supabase if candidate is logged in
+    try {
+      if (userId && userId !== "guest_user" && userId !== "anonymous") {
+        // 1. Call server function with elevated recruiter authorization to ensure Supabase DB update succeeds
+        try {
+          await saveInterviewScorecardServerFn({
+            data: {
+              jobId,
+              studentId: userId,
+              candidateName,
+              targetJobTitle,
+              scorecard: finalScorecard as unknown as Record<string, unknown>,
+              overallScore: finalScorecard.overallScore,
+            },
+          });
+        } catch (serverErr) {
+          console.warn("[AiInterviewRoom] ServerFn save fallback:", serverErr);
+        }
+
+        // 2. Also attempt direct client upsert as extra redundancy
+        const { data: existingApp } = await supabase
+          .from("applications")
+          .select("match_report, match_score")
+          .eq("job_id", jobId)
+          .eq("student_id", userId)
+          .maybeSingle();
+
+        const existingReport = (existingApp?.match_report || {}) as Record<string, unknown>;
+
+        await supabase.from("applications").upsert(
+          {
+            job_id: jobId,
+            student_id: userId,
+            match_score: existingApp?.match_score ?? finalScorecard.overallScore ?? null,
+            match_report: {
+              ...existingReport,
+              candidate_name: candidateName || (existingReport.candidate_name as string),
+              target_role: targetJobTitle,
+              interview_scorecard: finalScorecard,
+              overallScore: finalScorecard.overallScore,
+              stage: "interview_completed",
+            },
+            status: "under_review",
+            result_published: true,
+          },
+          { onConflict: "job_id, student_id" },
+        );
+      }
+    } catch (dbErr) {
+      console.warn("Could not sync interview scorecard to Supabase:", dbErr);
+    }
+
     setScorecard(finalScorecard);
     setStage("scorecard");
   };

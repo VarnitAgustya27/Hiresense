@@ -10,6 +10,7 @@ import { EditJobModal } from "@/components/EditJobModal";
 import ProfileDropdown from "@/components/kokonutui/profile-dropdown";
 import { useApplications } from "@/hooks/useApplications";
 import type { ApplicationRecord } from "@/lib/applications";
+import { getCandidatesForJob } from "@/lib/recruiter-candidates";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -56,6 +57,22 @@ function DashboardPage() {
   const appliedCount = useMemo(() => {
     return jobs.filter((j) => applicationsMap.has(j.id)).length;
   }, [jobs, applicationsMap]);
+
+  // Recruiter applicant counts per job
+  const [recruiterApplicantCounts, setRecruiterApplicantCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (profile?.role === "recruiter" && jobs.length > 0) {
+      jobs.forEach((job) => {
+        getCandidatesForJob(job.id, job.title).then((cands) => {
+          setRecruiterApplicantCounts((prev) => ({
+            ...prev,
+            [job.id]: cands.length,
+          }));
+        });
+      });
+    }
+  }, [profile?.role, jobs]);
 
   // Bookmarks store (separate concept from Applied)
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(() => {
@@ -545,6 +562,7 @@ function DashboardPage() {
                   onToggleBookmark={handleToggleBookmark}
                   onEdit={(j) => setEditingJob(j)}
                   onToggleStatus={(j) => handleToggleJobStatus(j)}
+                  applicantCount={recruiterApplicantCounts[job.id]}
                 />
               ))}
             </div>

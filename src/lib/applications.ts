@@ -68,6 +68,25 @@ function notifySubscribers(userId: string, jobId: string): void {
 }
 
 /**
+ * Remove all local applications from storage so user can test completely fresh.
+ */
+export function clearAllLocalApplications(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(STORAGE_KEY_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (err) {
+    console.warn("Could not clear local applications:", err);
+  }
+}
+
+/**
  * Retrieve all applications for a user.
  */
 export function listApplications(userId: string): ApplicationRecord[] {
@@ -118,7 +137,9 @@ export function findApplicationForJob(
         if (raw) {
           const list = JSON.parse(raw);
           if (Array.isArray(list)) {
-            const match = list.find((item: ApplicationRecord) => item && item.jobId === jobId);
+            const match = list.find(
+              (item: ApplicationRecord) => item && item.jobId === jobId,
+            );
             if (match) return match;
           }
         }

@@ -318,14 +318,40 @@ function JobApplyPage() {
         } = await supabase.auth.getUser();
 
         if (user) {
-          await supabase.from("applications").insert({
-            job_id: job.id,
-            student_id: user.id,
-            match_score: result.overall_fit_percentage,
-            match_report: result as unknown as Record<string, unknown>,
-            status: "screened",
-            result_published: true,
-          });
+          const { data: existingApp } = await supabase
+            .from("applications")
+            .select("match_report")
+            .eq("job_id", job.id)
+            .eq("student_id", user.id)
+            .maybeSingle();
+
+          const existingReport = (existingApp?.match_report || {}) as Record<string, unknown>;
+
+          const reportPayload = {
+            ...existingReport,
+            ...(result as unknown as Record<string, unknown>),
+            candidate_name: result.candidate_name || uploadData.candidateName || user.email?.split("@")[0],
+            candidate_email: result.candidate_email || uploadData.candidateEmail || user.email,
+            target_role: job.title,
+            interview_scorecard: existingReport.interview_scorecard || undefined,
+            overallScore: existingReport.overallScore || undefined,
+          };
+
+          const { error: upsertErr } = await supabase.from("applications").upsert(
+            {
+              job_id: job.id,
+              student_id: user.id,
+              resume_path: uploadData.fileName,
+              match_score: result.overall_fit_percentage,
+              match_report: reportPayload,
+              status: "under_review",
+              result_published: true,
+            },
+            { onConflict: "job_id, student_id" },
+          );
+          if (upsertErr) {
+            console.error("Supabase application upsert error:", upsertErr);
+          }
         }
       } catch (dbErr) {
         console.warn("Could not save application record to database:", dbErr);
