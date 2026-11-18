@@ -41,14 +41,13 @@ describe("Application State & Persistence Repository", () => {
       jobId,
       {
         fileName: "Aarav_Resume.pdf",
-        uploadedAt: new Date().toISOString(),
         parsedSummary: "4 years React and TypeScript",
       },
       "en",
     );
 
     expect(updated.stage).toBe("resume_uploaded");
-    expect(updated.resume?.fileName).toBe("Aarav_Resume.pdf");
+    expect(updated.resume.fileName).toBe("Aarav_Resume.pdf");
     expect(updated.language).toBe("en");
 
     const retrieved = getApplication(userId, jobId);
@@ -62,12 +61,11 @@ describe("Application State & Persistence Repository", () => {
       jobId,
       {
         fileName: "Aarav_Resume.pdf",
-        uploadedAt: new Date().toISOString(),
       },
       "en",
     );
 
-    const withConsent = recordConsentAndLanguage(userId, jobId, "hi", new Date().toISOString());
+    const withConsent = recordConsentAndLanguage(userId, jobId, "hi");
     expect(withConsent.stage).toBe("interview_pending");
     expect(withConsent.language).toBe("hi");
     expect(withConsent.consent?.acceptedAt).toBeDefined();
@@ -76,14 +74,26 @@ describe("Application State & Persistence Repository", () => {
     expect(inProgress.stage).toBe("interview_in_progress");
     expect(inProgress.interviewSessionId).toBe("sess_abc");
 
-    const stepped = recordInterviewProgress(userId, jobId, "sess_abc", 3, 5);
+    const stepped = recordInterviewProgress(userId, jobId, {
+      currentIdx: 3,
+      answers: { q1: "test answer" },
+      durations: { q1: 25 },
+      sessionSeconds: 120,
+    });
     expect(stepped.stage).toBe("interview_in_progress");
+    expect(stepped.interviewProgress?.currentIdx).toBe(3);
 
     const mockScorecard: InterviewScorecard = {
       candidateName: "Aarav Sharma",
       targetJobTitle: "Frontend Engineer",
       overallScore: 84,
       fitVerdict: "Strong Fit",
+      completedAt: new Date().toISOString(),
+      durationFormatted: "12m 30s",
+      evaluationSource: "deterministic",
+      modelUsed: "deterministic",
+      lowConfidence: false,
+      language: "en",
       categories: {
         technicalAccuracy: 85,
         communicationClarity: 82,
@@ -103,7 +113,7 @@ describe("Application State & Persistence Repository", () => {
 
     const allApps = listApplications(userId);
     expect(allApps).toHaveLength(1);
-    expect(allApps[0].stage).toBe("interview_completed");
+    expect(allApps[0]!.stage).toBe("interview_completed");
   });
 
   it("generates correct card statuses and detail progress trackers", () => {
@@ -112,7 +122,6 @@ describe("Application State & Persistence Repository", () => {
       jobId,
       {
         fileName: "Aarav.pdf",
-        uploadedAt: new Date().toISOString(),
       },
       "en",
     );
@@ -124,10 +133,10 @@ describe("Application State & Persistence Repository", () => {
     expect(ctaLabel).toBe("Continue to interview");
 
     const tracker = getApplicationProgressTracker(resumeApp);
-    expect(tracker.steps[0].state).toBe("done"); // Applied
-    expect(tracker.steps[1].state).toBe("done"); // Resume
-    expect(tracker.steps[2].state).toBe("current"); // Interview
-    expect(tracker.steps[3].state).toBe("upcoming"); // Results
+    expect(tracker.steps[0]!.state).toBe("done"); // Applied
+    expect(tracker.steps[1]!.state).toBe("done"); // Resume
+    expect(tracker.steps[2]!.state).toBe("current"); // Interview
+    expect(tracker.steps[3]!.state).toBe("upcoming"); // Results
   });
 
   it("finds applications synchronously via findApplicationForJob without flash", () => {
@@ -136,14 +145,13 @@ describe("Application State & Persistence Repository", () => {
       jobId,
       {
         fileName: "Synchronous_Resume.pdf",
-        uploadedAt: new Date().toISOString(),
       },
       "hi",
     );
 
     const found = findApplicationForJob(jobId, userId);
     expect(found).not.toBeNull();
-    expect(found?.resume?.fileName).toBe("Synchronous_Resume.pdf");
+    expect(found?.resume.fileName).toBe("Synchronous_Resume.pdf");
     expect(found?.language).toBe("hi");
 
     // Also finds across user keys when preferredUserId is omitted

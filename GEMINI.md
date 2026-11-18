@@ -678,3 +678,4 @@ These are intentionally unresolved. Do not guess; use placeholders and flag them
 - **No fake metrics**: the source report's results are targets, not measurements.
 - **No third-party imagery**: keeps the page fast and fully on-system.
 - **Accent restraint**: one blue badge and one live dot, so blue reads as a signal.
+- **Score colors**: Green (#4ade80, >=75), Yellow (#facc15, 50-74), and Red (#f87171, <50) are permitted as an exception to the monochrome system exclusively for score visualizations (activity rings, scorecard gauge, question badges, and rubric metric bars).

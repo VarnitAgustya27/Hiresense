@@ -575,6 +575,7 @@ function JobApplyPage() {
               jobPosting={memoizedJobPosting}
               preferredLanguage={preferredLanguage}
               verificationQuestions={analysisResult.verification_questions}
+              analysis={analysisResult}
             />
           </div>
         )}

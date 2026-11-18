@@ -263,6 +263,7 @@ Type: Video · Length: 15 min 45 s
 ### Lesson notes
 
 In this video, we discuss:
+
 - Defining a DB connector
 
 - Updating the database
@@ -338,6 +339,7 @@ Type: Video · Length: 11 min 23 s
 
 We discuss building a rate limiter client in Java that can be used by different teams in the organization that use other languages.
 The API package contains a single class containing functions that expose the rate-limiting service. We walk through the different endpoints and functions required in the rate limiter client, such as:
+
 - Getting the service configuration from the server
 
 - Hitting the rate limiter

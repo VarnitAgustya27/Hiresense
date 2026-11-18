@@ -1,18 +1,18 @@
 ---
 annotations_creators:
-- human-generated
+  - human-generated
 language:
-- en
+  - en
 license: apache-2.0
 multilinguality: monolingual
 size_categories:
-- 10K<n<100K
+  - 10K<n<100K
 source_datasets:
-- original
+  - original
 task_categories:
-- question-answering
-- conversational
+  - question-answering
+  - conversational
 task_ids:
-- open-domain-qa
-- dialogue-modeling
+  - open-domain-qa
+  - dialogue-modeling
 ---

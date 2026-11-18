@@ -2,7 +2,6 @@
 
 Every quiz in the course with its answers. Correct options are marked **(correct)**.
 
-
 ## Payment Tracking: Quiz #1
 
 ### Why did we use a heap instead of a balanced binary search tree here?
@@ -12,7 +11,7 @@ Every quiz in the course with its answers. Correct options are marked **(correct
 - The BST needs more memory.
 - The heap is the only data structure with polling support.
 
-Why: Worst case time complexity to find largest element in BST  is O(log n) whereas it is O(1) in  a max heap.
+Why: Worst case time complexity to find largest element in BST is O(log n) whereas it is O(1) in a max heap.
 
 ### We continue the process of eliminating the topmost elements in both heaps till one of them is empty. What is the state of the other heap?
 
@@ -31,7 +30,6 @@ Why: Two heaps store the amount paid and owed. Since the amount paid = amount ow
 - Change the list of users in a the group table to a map of users to roles.
 
 Why: Since we want to speed up queries to view groups we can make a separate table to store information about group members and roles. This process of storing redundant data to optimize query processing is called denormalization.
-
 
 ## Payment Tracking: Quiz #2
 
@@ -60,7 +58,6 @@ Why: By creating a new object we won't be needing write lock so users can view d
 - Neither inheritance nor composition are used for implementing object relationships.
 
 Why: In 'is a' relationship one class inherits another class. In 'has a' relationship object of one class references object of another class. For example, a fish 'is a' marine animal, and it 'has a' pair of gills.
-
 
 ## Event Bus: Quiz #1
 
@@ -100,7 +97,6 @@ Why: If two tasks do not affect each other then they can be processed in any ord
 
 Why: To order the tasks using timestamps we need to synchronize the clocks or use vector clocks both of which are complicated. By using threads we can run tasks concurrently and also maintain ordering (causal ordering).
 
-
 ## Event Bus: Quiz #2
 
 ### Why do we use wrappers instead of raw datatypes?
@@ -138,7 +134,6 @@ Why: By making a wrapper class of "Topic" for topic ID we can catch most errors 
 
 Why: Timeout is the amount of time thread has to wait before retrying. We achieve this by putting the threads to sleep. However there is maximum number of retries after which the event is sent to dead letter queue.
 
-
 ## Event Bus: Quiz #3
 
 ### What methods must be tested before signing off code?
@@ -167,7 +162,6 @@ Why: Running concurrent code can lead to race conditions (tasks are not processe
 - Logs are insufficient for testing an application end to end.
 
 Why: Writing tests allow us to find errors in the code early on. Logging events helps us to understand complex systems and diagnose problems later on.
-
 
 ## Quiz 1
 
@@ -217,7 +211,6 @@ Why: Over-engineering means designing and building for features that are unlikel
 - We split classes into different packages and then use customised compression algorithms on each of them to optimise code builds.
 
 Why: Developer onboarding is a large cost for companies and a big part of it is walking through existing code. We simplify onboarding problems by setting coding standards and package structures .
-
 
 ## The Big Exam
 
@@ -300,4 +293,4 @@ Why: Dead letter queue has all events that were not processed, we can pull event
 - Maintaining ordering in timestamp based approach is more complex compared to thread based approach **(correct)**
 - There are no advantages
 
-Why: Some components might be faster/slower than others and it can mess up the ordering. Check the example at https://get.interviewready.io/blog/eventbus . In timestamp based approach we can only have strict ordering, but in thread based approach we can assign events (that are to be processed in order) to the same thread. This way we can process the required events in order.  Vector clocks can be used for event based ordering, but are conceptually complex.
+Why: Some components might be faster/slower than others and it can mess up the ordering. Check the example at https://get.interviewready.io/blog/eventbus . In timestamp based approach we can only have strict ordering, but in thread based approach we can assign events (that are to be processed in order) to the same thread. This way we can process the required events in order. Vector clocks can be used for event based ordering, but are conceptually complex.

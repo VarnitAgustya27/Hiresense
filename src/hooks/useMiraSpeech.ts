@@ -79,15 +79,55 @@ async function getOrWaitForVoices(): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
+let sharedAudioUnlock: HTMLAudioElement | null = null;
+
+export function unlockAudio() {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (AudioCtx) {
+      const ctx = new AudioCtx();
+      ctx.resume().catch(() => {});
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+    }
+    // Also unlock HTMLAudioElement for autoplay in Chrome
+    if (!sharedAudioUnlock) {
+      sharedAudioUnlock = new Audio();
+    }
+    sharedAudioUnlock.src =
+      "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+    sharedAudioUnlock.volume = 0.01;
+    sharedAudioUnlock
+      .play()
+      .then(() => {
+        sharedAudioUnlock?.pause();
+      })
+      .catch(() => {});
+  } catch (e) {
+    console.warn("[useMiraSpeech] unlockAudio failed:", e);
+  }
+}
+
 function selectBrowserVoice(
   voices: SpeechSynthesisVoice[],
   language: SpeechLanguage,
 ): SpeechSynthesisVoice | null {
   if (!voices || voices.length === 0) return null;
 
-  if (language === "hi") {
+  if (language === "hi" || language === "hinglish") {
     const hiVoice = voices.find((v) => v.lang.toLowerCase().startsWith("hi"));
     if (hiVoice) return hiVoice;
+    // For Hinglish or when Hindi voice is missing, Indian English is the best fallback
+    const enInVoice = voices.find(
+      (v) => v.lang.toLowerCase().includes("en-in") || v.name.toLowerCase().includes("india"),
+    );
+    if (enInVoice) return enInVoice;
   }
 
   // Preferred order: en-IN (Ravi / male), en-US (David / Mark / Guy / male), any en-IN, en-GB, en-US
@@ -160,8 +200,8 @@ export function useMiraSpeech(): {
   const currentEphemeralUrlRef = useRef<string | null>(null);
   const soundAudibleRef = useRef<boolean>(false);
 
-  // Session-wide sticky engine flag: if server fails once, stay on browser engine
-  const serverTtsDisabledRef = useRef<boolean>(false);
+  // Count consecutive failures before disabling server TTS for the session
+  const serverFailuresRef = useRef<number>(0);
 
   // Prefetch cache and in-flight map
   const prefetchCacheRef = useRef<Map<string, PrefetchCacheValue>>(new Map());
@@ -254,7 +294,7 @@ export function useMiraSpeech(): {
   // Prefetch implementation
   const prefetch = useCallback((text: string, language: SpeechLanguage) => {
     if (!text || typeof window === "undefined") return;
-    if (serverTtsDisabledRef.current) return;
+    if (serverFailuresRef.current >= 3) return;
 
     const cacheKey = `${language}:${text.trim()}`;
     if (prefetchCacheRef.current.has(cacheKey) || inFlightPrefetchRef.current.has(cacheKey)) {
@@ -513,7 +553,10 @@ export function useMiraSpeech(): {
         const tryFallbackToBrowser = () => {
           if (fallbackStarted || soundStarted) return;
           fallbackStarted = true;
-          serverTtsDisabledRef.current = true;
+          serverFailuresRef.current++;
+          logDev(
+            `[TTS#${id}] server failure count=${serverFailuresRef.current}, falling back to browser`,
+          );
 
           // Hard kill server audio before falling back to browser engine
           if (activeAudioRef.current) {
@@ -540,8 +583,8 @@ export function useMiraSpeech(): {
           startBrowserEngine();
         };
 
-        // If server TTS was already disabled for this session, skip straight to browser engine
-        if (serverTtsDisabledRef.current) {
+        // If server TTS repeatedly failed 3 times in this session, skip straight to browser engine
+        if (serverFailuresRef.current >= 3) {
           startBrowserEngine();
           return;
         }
@@ -655,6 +698,7 @@ export function useMiraSpeech(): {
 
           audio.onplaying = () => {
             if (id !== requestIdRef.current) return;
+            serverFailuresRef.current = 0;
             triggerOnStartOnce();
 
             if (schedule.length === 0) {
@@ -731,7 +775,8 @@ export function useMiraSpeech(): {
 
           try {
             await audio.play();
-          } catch {
+          } catch (playErr) {
+            console.warn(`[useMiraSpeech#${id}] audio.play() failed:`, playErr);
             const a = activeAudioRef.current;
             if (a) {
               a.onended = null;

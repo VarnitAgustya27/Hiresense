@@ -345,7 +345,7 @@ export function analyzeResumeDeterministically(
   const overallFit = Math.min(98, Math.max(25, Math.round(rawScore)));
 
   const fitLevel: ResumeAnalysisResult["fit_level"] =
-    overallFit >= 78 ? "High Fit" : overallFit >= 60 ? "Moderate Fit" : "Developing Fit";
+    overallFit >= 75 ? "High Fit" : overallFit >= 50 ? "Moderate Fit" : "Developing Fit";
 
   // Verification questions
   const verificationQuestions = [
@@ -537,8 +537,14 @@ ${resumeContent.slice(0, 15000)}`;
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           const parsed = JSON.parse(content) as ResumeAnalysisResult;
-          parsed.model_used = "OpenAI gpt-4o-mini";
+          parsed.model_used = "HireSense Evidence Engine";
           parsed.analyzed_at = new Date().toISOString();
+          parsed.fit_level =
+            parsed.overall_fit_percentage >= 75
+              ? "High Fit"
+              : parsed.overall_fit_percentage >= 50
+                ? "Moderate Fit"
+                : "Developing Fit";
           // Ensure detected name is kept if LLM reverted to placeholder
           if (parsed.candidate_name === "Aarav Sharma" && resolvedName !== "Aarav Sharma") {
             parsed.candidate_name = resolvedName;
@@ -579,8 +585,14 @@ ${resumeContent.slice(0, 15000)}`;
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) {
           const parsed = JSON.parse(text) as ResumeAnalysisResult;
-          parsed.model_used = "Google Gemini 3.8 Flash";
+          parsed.model_used = "HireSense Evidence Engine";
           parsed.analyzed_at = new Date().toISOString();
+          parsed.fit_level =
+            parsed.overall_fit_percentage >= 75
+              ? "High Fit"
+              : parsed.overall_fit_percentage >= 50
+                ? "Moderate Fit"
+                : "Developing Fit";
           if (parsed.candidate_name === "Aarav Sharma" && resolvedName !== "Aarav Sharma") {
             parsed.candidate_name = resolvedName;
           }

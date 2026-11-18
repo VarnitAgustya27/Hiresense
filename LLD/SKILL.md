@@ -6,6 +6,7 @@ description: Rebuild the user's own code with the low level design (LLD) knowled
 # InterviewReady: Low Level Design, applied to your code
 
 You help the user rebuild their own code using what the InterviewReady Low Level Design course teaches. The course's knowledge is your knowledge base:
+
 - `references/`: every lesson in course order, with lesson notes and full transcripts;
 - `references/quizzes.md`: every quiz with answers and explanations;
 - `assets/`: summary PDFs, diagrams and the course's source code.
@@ -19,6 +20,7 @@ Follow these five steps in order. Never edit the user's project before step 4. S
 ### 1. Understand what they are building
 
 Work it out yourself before asking anything:
+
 - Read the README, build files, entry points (main, routes, handlers), the core models, the tests and the recent history (`git log`, `git diff`, open TODOs).
 - Work out the domain, the main objects and their state, the public APIs, the language and framework, how it is tested, and what the user is trying to do right now: a new feature, a bug, or code that has become hard to change.
 
@@ -35,12 +37,14 @@ If their system has the shape of one of the course's reference designs (see the 
 ### 3. Suggest, as strategic decisions
 
 Present a short plan, worst problem first. Rank by payoff over effort: "If you divide payoff by the amount of time, then you get a rough priority." For each strategic decision give:
+
 - the problem in their code (file and function);
 - the options, including leaving it alone;
 - your recommendation and why, with the course's reasoning and lesson;
 - what it changes for callers and tests.
 
 A decision is strategic if it does any of the following:
+
 - introduces or removes an abstraction or pattern;
 - moves a responsibility between classes;
 - changes a public API, data model or storage;
@@ -55,6 +59,7 @@ Then stop and ask the user which decisions to approve. Approval of one decision 
 ### 4. Change, in small verified steps
 
 For each approved decision, in order:
+
 - **If the code has no tests, add tests first.** Test around the behaviour you are about to change: "for our purpose what we have do is we create a test around the game object."
 - **Keep callers working.** Change internals behind stable public APIs, as the course does: "the internal implementation of history can change, but it's public APIs or public functions don't need to change." Prefer additions such as a new class, a builder method or a sub interface ("So this is non breaking code that's great backward compatible").
 - **Run the tests after every step:** "it's extensible, but is it correct is a very important question."
@@ -105,21 +110,21 @@ The course never starts from a principle. It finds a problem in the code, fixes 
 
 The course reaches for a pattern only when the code needs it, and it checks the pattern's preconditions first: "therefore we shouldn't even try to do this." Recommend a pattern only when the user's code shows the situation in the left column.
 
-| Situation in the code | Course's choice | Lesson |
-|---|---|---|
-| Many optional fields, so the number of constructors doubles | Builder ("we just need to add a single function in the [builder]") | `references/06-open-closed-principle.md` |
-| Creating an object takes many parameters or business logic | Factory ("takes complex object creations and converts them into simple object creations") | `references/10-test-driven-changes.md`, `references/11-the-strategy-design-pattern.md` |
-| The input picks the algorithm, and callers should not know which | Strategy, made by a `StrategyFactory` | `references/10-test-driven-changes.md`, `references/11-the-strategy-design-pattern.md` |
-| States with transitions | State, but not if the state graph is a total mesh, or if each state repeats the transition logic | `references/10-test-driven-changes.md` |
-| Independent rules whose order does not matter | Rule engine (rules in a list or a `RuleSet`) | `references/06-open-closed-principle.md`, `references/07-liskov-substitution-principle.md` |
-| Ordered steps, tried until one applies | Chain of responsibility (`Placement.next`) | `references/08-interface-segregation-and-dependency-inversion.md` |
-| Look ahead without changing the real object | Prototype (`copy()`); watch for shallow copies | `references/04-exploring-moves-for-the-ai.md` |
-| Undo and history | Memento (store the state, do not reverse the moves) | `references/09-memory-and-code-optimizations.md` |
-| Heavy objects kept around | Proxy, or a compact representation | `references/09-memory-and-code-optimizations.md` |
-| Many identical, immutable small objects | Object pool (`Cell.getCell`), though "a cell is a very light object" | `references/11-the-strategy-design-pattern.md` |
-| Wide method signatures, where one change ripples everywhere | Command, built with a builder | `references/12-command-and-strategy-patterns.md` |
-| Many consumers of one event | Publisher subscriber over an event bus | `references/12-command-and-strategy-patterns.md`, `references/15-machine-coding-an-event-bus.md` |
-| Exactly one instance | Singleton, but from a library: "I wouldn't suggest that you implement the singleton design pattern anywhere by yourself." | `references/08-interface-segregation-and-dependency-inversion.md` |
+| Situation in the code                                            | Course's choice                                                                                                           | Lesson                                                                                           |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Many optional fields, so the number of constructors doubles      | Builder ("we just need to add a single function in the [builder]")                                                        | `references/06-open-closed-principle.md`                                                         |
+| Creating an object takes many parameters or business logic       | Factory ("takes complex object creations and converts them into simple object creations")                                 | `references/10-test-driven-changes.md`, `references/11-the-strategy-design-pattern.md`           |
+| The input picks the algorithm, and callers should not know which | Strategy, made by a `StrategyFactory`                                                                                     | `references/10-test-driven-changes.md`, `references/11-the-strategy-design-pattern.md`           |
+| States with transitions                                          | State, but not if the state graph is a total mesh, or if each state repeats the transition logic                          | `references/10-test-driven-changes.md`                                                           |
+| Independent rules whose order does not matter                    | Rule engine (rules in a list or a `RuleSet`)                                                                              | `references/06-open-closed-principle.md`, `references/07-liskov-substitution-principle.md`       |
+| Ordered steps, tried until one applies                           | Chain of responsibility (`Placement.next`)                                                                                | `references/08-interface-segregation-and-dependency-inversion.md`                                |
+| Look ahead without changing the real object                      | Prototype (`copy()`); watch for shallow copies                                                                            | `references/04-exploring-moves-for-the-ai.md`                                                    |
+| Undo and history                                                 | Memento (store the state, do not reverse the moves)                                                                       | `references/09-memory-and-code-optimizations.md`                                                 |
+| Heavy objects kept around                                        | Proxy, or a compact representation                                                                                        | `references/09-memory-and-code-optimizations.md`                                                 |
+| Many identical, immutable small objects                          | Object pool (`Cell.getCell`), though "a cell is a very light object"                                                      | `references/11-the-strategy-design-pattern.md`                                                   |
+| Wide method signatures, where one change ripples everywhere      | Command, built with a builder                                                                                             | `references/12-command-and-strategy-patterns.md`                                                 |
+| Many consumers of one event                                      | Publisher subscriber over an event bus                                                                                    | `references/12-command-and-strategy-patterns.md`, `references/15-machine-coding-an-event-bus.md` |
+| Exactly one instance                                             | Singleton, but from a library: "I wouldn't suggest that you implement the singleton design pattern anywhere by yourself." | `references/08-interface-segregation-and-dependency-inversion.md`                                |
 
 ## Concurrency toolkit
 
@@ -163,19 +168,20 @@ The course solves concurrency differently in each problem. Name the options to t
 
 When the user's system has the same shape as one of these, read the file and use the course's design as the starting point for your suggestions.
 
-| If they are building | The course's design | File |
-|---|---|---|
-| Shared expenses, balances, settlements, ledgers | State first objects, greedy two heap settlement, immutable balances, BigDecimal for money | `references/13-payment-tracking-app-like-splitwise.md` |
-| A cache or memoising layer | Write back vs write through, read your own writes, LRU and LFU with an expiry queue, lazy eviction, thread per key, request collapsing, hot loading | `references/14-machine-coding-a-cache.md` |
-| A turn based game, a rules engine, or a feature that keeps growing | One codebase refactored step by step through SRP, DRY, OCP, LSP, ISP, DIP and the patterns above | `references/02-building-a-game-engine.md` to `references/12-command-and-strategy-patterns.md` |
-| Events, queues, publish subscribe, notifications | Topics, push and pull, ordering by keyed executors, retries, dead letter queue, indexes; Command and publisher subscriber for notifications | `references/15-machine-coding-an-event-bus.md`, `references/12-command-and-strategy-patterns.md` |
-| Rate limiting, quotas, throttling | Client library plus server, heartbeats, pluggable sliding window, back pressure, DAOs | `references/16-machine-coding-a-rate-limiter.md` |
+| If they are building                                               | The course's design                                                                                                                                 | File                                                                                             |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Shared expenses, balances, settlements, ledgers                    | State first objects, greedy two heap settlement, immutable balances, BigDecimal for money                                                           | `references/13-payment-tracking-app-like-splitwise.md`                                           |
+| A cache or memoising layer                                         | Write back vs write through, read your own writes, LRU and LFU with an expiry queue, lazy eviction, thread per key, request collapsing, hot loading | `references/14-machine-coding-a-cache.md`                                                        |
+| A turn based game, a rules engine, or a feature that keeps growing | One codebase refactored step by step through SRP, DRY, OCP, LSP, ISP, DIP and the patterns above                                                    | `references/02-building-a-game-engine.md` to `references/12-command-and-strategy-patterns.md`    |
+| Events, queues, publish subscribe, notifications                   | Topics, push and pull, ordering by keyed executors, retries, dead letter queue, indexes; Command and publisher subscriber for notifications         | `references/15-machine-coding-an-event-bus.md`, `references/12-command-and-strategy-patterns.md` |
+| Rate limiting, quotas, throttling                                  | Client library plus server, heartbeats, pluggable sliding window, back pressure, DAOs                                                               | `references/16-machine-coding-a-rate-limiter.md`                                                 |
 
 The source code for Splitwise and the event bus is in `assets/code/`.
 
 ## Files
 
 Every lesson, in the order the course page shows it. Files 02 to 12 are the game engine series (its chapters 1 to 11), files 13 to 16 are the machine coding series (its chapters 1 to 4), file 17 is the course test, and files 18 and 19 are recorded live classes and extra videos. Each file has the lesson notes and full transcript.
+
 - `references/01-how-do-i-use-this-course.md`
 - `references/02-building-a-game-engine.md`
 - `references/03-single-responsibility-principle.md`

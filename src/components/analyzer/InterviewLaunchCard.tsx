@@ -11,6 +11,7 @@ import {
 import { AiInterviewRoom } from "@/components/interview/AiInterviewRoom";
 import { useMediaSession } from "@/hooks/useMediaSession";
 import { recordConsentAndLanguage } from "@/lib/applications";
+import type { PlanContext } from "@/lib/interview-planner";
 
 interface InterviewLaunchCardProps {
   userId?: string;
@@ -20,6 +21,7 @@ interface InterviewLaunchCardProps {
   jobPosting?: Record<string, unknown>;
   preferredLanguage?: "en" | "hi" | "hinglish";
   verificationQuestions?: string[];
+  analysis?: PlanContext["analysis"];
 }
 
 export function InterviewLaunchCard({
@@ -30,6 +32,7 @@ export function InterviewLaunchCard({
   jobPosting = {},
   preferredLanguage = "en",
   verificationQuestions = [],
+  analysis,
 }: InterviewLaunchCardProps) {
   const [selectedLanguage, setSelectedLanguage] = useState<"en" | "hi" | "hinglish">(
     preferredLanguage,
@@ -45,7 +48,7 @@ export function InterviewLaunchCard({
 
   const handleStart = async () => {
     // Record consent and language in persistence
-    recordConsentAndLanguage(userId, jobId, selectedLanguage, new Date().toISOString());
+    recordConsentAndLanguage(userId, jobId, selectedLanguage);
 
     // Acquire stream if not already acquired
     if (!isAcquired) {
@@ -193,6 +196,7 @@ export function InterviewLaunchCard({
           jobPosting={jobPosting}
           verificationQuestions={verificationQuestions}
           preferredLanguage={selectedLanguage}
+          analysis={analysis}
           onClose={() => setIsInterviewOpen(false)}
         />
       )}

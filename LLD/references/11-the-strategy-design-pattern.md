@@ -7,6 +7,7 @@ Type: Video · Length: 8 min 33 s
 ### Lesson notes
 
 We look into different methods for constructing objects.
+
 - Object pools
 
 - Factories

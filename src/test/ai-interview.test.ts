@@ -17,14 +17,14 @@ describe("AI Interview Engine (Mira Persona)", () => {
     const questions = generateInterviewQuestions("Senior Frontend Engineer", jobPosting);
 
     expect(questions).toHaveLength(5);
-    expect(questions[0].phase).toBe("intro");
-    expect(questions[1].phase).toBe("technical");
-    expect(questions[2].phase).toBe("architecture");
-    expect(questions[3].phase).toBe("scenario");
-    expect(questions[4].phase).toBe("closing");
+    expect(questions[0]!.phase).toBe("intro");
+    expect(questions[1]!.phase).toBe("technical");
+    expect(questions[2]!.phase).toBe("architecture");
+    expect(questions[3]!.phase).toBe("scenario");
+    expect(questions[4]!.phase).toBe("closing");
 
-    expect(questions[0].question).toContain("Mira");
-    expect(questions[0].question).toContain("Senior Frontend Engineer");
+    expect(questions[0]!.question).toContain("Mira");
+    expect(questions[0]!.question).toContain("Senior Frontend Engineer");
   });
 
   it("evaluates candidate answers and produces an objective evidence scorecard", () => {
@@ -100,8 +100,8 @@ describe("AI Interview Engine (Mira Persona)", () => {
     expect(scorecard.categories.technicalAccuracy).toBe(0);
     expect(scorecard.categories.communicationClarity).toBe(0);
     expect(scorecard.categories.problemSolving).toBe(0);
-    expect(scorecard.answers[0].metrics.technicalScore).toBe(0);
-    expect(scorecard.answers[0].strengths[0]).toContain("No answer recorded");
+    expect(scorecard.answers[0]!.metrics.technicalScore).toBe(0);
+    expect(scorecard.answers[0]!.strengths[0]).toContain("No answer recorded");
   });
 
   it("assigns near-zero score and honest gaps when candidate provides only greetings or single characters", () => {
@@ -134,11 +134,11 @@ describe("AI Interview Engine (Mira Persona)", () => {
     expect(scorecard.categories.technicalAccuracy).toBe(0);
     expect(scorecard.categories.problemSolving).toBe(0);
     // Question 1 greeting
-    expect(scorecard.answers[0].metrics.technicalScore).toBe(0);
-    expect(scorecard.answers[0].improvements[0]).toContain("Answer was only a greeting");
+    expect(scorecard.answers[0]!.metrics.technicalScore).toBe(0);
+    expect(scorecard.answers[0]!.improvements[0]).toContain("Answer was only a greeting");
     // Question 3 single character
-    expect(scorecard.answers[2].metrics.technicalScore).toBe(0);
-    expect(scorecard.answers[2].strengths[0]).toContain("No substantive technical content");
+    expect(scorecard.answers[2]!.metrics.technicalScore).toBe(0);
+    expect(scorecard.answers[2]!.strengths[0]).toContain("No substantive technical content");
     // Honest takeaways with no false praise
     expect(scorecard.keyTakeaways[0]).toContain("minimal or non-substantive responses");
     expect(scorecard.gaps[0]).toContain("Multiple interview phases were skipped");

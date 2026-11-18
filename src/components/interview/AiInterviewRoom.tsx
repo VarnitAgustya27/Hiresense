@@ -15,10 +15,12 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Radio,
   Keyboard,
   AlertTriangle,
   CheckCircle2,
+  Sparkles,
+  RefreshCw,
+  Quote,
 } from "lucide-react";
 import {
   generateInterviewQuestions,
@@ -27,56 +29,27 @@ import {
   type InterviewScorecard,
 } from "@/lib/ai-interview";
 import { useMediaSession } from "@/hooks/useMediaSession";
-import { useMiraSpeech } from "@/hooks/useMiraSpeech";
+import { useMiraSpeech, unlockAudio } from "@/hooks/useMiraSpeech";
 import { VoicePill, type VoiceState } from "@/components/interview/VoicePill";
 import {
   LiveSyncedTranscript,
   type ConversationTurn,
 } from "@/components/kokonutui/synced-transcript";
-import AI_Voice from "@/components/kokonutui/ai-voice";
 import { AppleActivityCard } from "@/components/kokonutui/apple-activity-card";
 import AITextLoading from "@/components/kokonutui/ai-text-loading";
+import { AnswerRecorder, type QuestionPhase } from "@/components/interview/AnswerRecorder";
+import { useAnswerRecorder } from "@/hooks/useAnswerRecorder";
+import { transcribeAudioBlob } from "@/lib/transcribe-client";
+import { STATUS_TEXTS } from "@/lib/interview-i18n";
+import { scoreTone } from "@/lib/score-tone";
+import { RUBRIC_WEIGHTS, type RubricKey } from "@/lib/scoring";
+import type { PlanContext } from "@/lib/interview-planner";
 import {
   recordInterviewStarted,
   recordInterviewProgress,
   recordInterviewCompleted,
 } from "@/lib/applications";
 import { cn } from "@/lib/utils";
-
-interface SpeechRecognitionResultItem {
-  transcript: string;
-}
-
-interface SpeechRecognitionResultList {
-  [index: number]: {
-    [index: number]: SpeechRecognitionResultItem;
-    isFinal: boolean;
-    length: number;
-  };
-  length: number;
-}
-
-interface BrowserSpeechRecognitionEvent {
-  results: SpeechRecognitionResultList;
-}
-
-interface BrowserSpeechRecognitionErrorEvent {
-  error: string;
-}
-
-interface BrowserSpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onstart: (() => void) | null;
-  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
-  onerror: ((event: BrowserSpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-}
-
-type SpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
 interface AiInterviewRoomProps {
   userId?: string;
@@ -86,8 +59,18 @@ interface AiInterviewRoomProps {
   jobPosting?: Record<string, unknown>;
   verificationQuestions?: string[];
   preferredLanguage?: "en" | "hi" | "hinglish" | "code_mixed";
+  analysis?: PlanContext["analysis"];
   onClose: () => void;
 }
+
+const RUBRIC_LABELS: Record<RubricKey, { label: string; weight: string }> = {
+  technicalCorrectness: { label: "Technical Correctness", weight: "35%" },
+  problemSolving: { label: "Problem Solving", weight: "20%" },
+  projectUnderstanding: { label: "Project Understanding", weight: "15%" },
+  relevanceCompleteness: { label: "Relevance & Completeness", weight: "10%" },
+  communicationClarity: { label: "Communication Clarity", weight: "10%" },
+  behavioralEvidence: { label: "Behavioral Evidence", weight: "10%" },
+};
 
 export function AiInterviewRoom({
   userId = "guest_user",
@@ -97,6 +80,7 @@ export function AiInterviewRoom({
   jobPosting = {},
   verificationQuestions = [],
   preferredLanguage = "en",
+  analysis,
   onClose,
 }: AiInterviewRoomProps) {
   const navigate = useNavigate();
@@ -105,33 +89,36 @@ export function AiInterviewRoom({
   // Session stage: "lobby" | "interview" | "evaluating" | "scorecard"
   const [stage, setStage] = useState<"lobby" | "interview" | "evaluating" | "scorecard">("lobby");
 
-  // Language mapping
+  // Normalized language
   const normalizedLanguage: "en" | "hi" | "hinglish" =
     preferredLanguage === "code_mixed" ? "hinglish" : preferredLanguage;
   const [language, setLanguage] = useState<"en" | "hi" | "hinglish">(normalizedLanguage);
+  const [isPlanLoading, setIsPlanLoading] = useState(false);
 
-  // Questions in lobby (initialized synchronously so interview is never blank)
+  // Questions in lobby
   const [questions, setQuestions] = useState<InterviewQuestion[]>(() =>
-    generateInterviewQuestions(targetJobTitle, jobPosting, verificationQuestions),
+    generateInterviewQuestions(targetJobTitle, jobPosting, {
+      verificationQuestions,
+      language: normalizedLanguage,
+      analysis,
+    }),
   );
 
   // Frozen question snapshot used exclusively once interview starts
   const [sessionQuestions, setSessionQuestions] = useState<InterviewQuestion[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
 
-  // Dedicated single-owner Mira speech engine
+  // Per-question phase state machine
+  const [questionPhase, setQuestionPhase] = useState<QuestionPhase>("preparing");
+
+  // Dedicated Mira speech engine
   const {
     phase: speechPhase,
     progress: speechProgress,
     speak: speakSpeech,
     prefetch: prefetchSpeech,
     cancel: cancelSpeech,
-    isSpeaking: isSpeechSpeaking,
   } = useMiraSpeech();
-
-  // Question reveal state: question text and hint revealed only after real sound starts
-  const [revealedQuestionId, setRevealedQuestionId] = useState<string | null>(null);
-  const [voiceFailedNotice, setVoiceFailedNotice] = useState(false);
 
   // Single media session from context
   const { stream, isAcquired, hasCamera, hasMic, audioLevel, acquire, release } = useMediaSession();
@@ -140,13 +127,12 @@ export function AiInterviewRoom({
   const [isCameraActive, setIsCameraActive] = useState(true);
   const [isMicMuted, setIsMicMuted] = useState(false);
 
-  // Voice & Interview states
-  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
-  const [currentAnswer, setCurrentAnswer] = useState("");
+  // Manual text fallback toggle and input
   const [manualTextMode, setManualTextMode] = useState(false);
-  const [silencePrompt, setSilencePrompt] = useState(false);
+  const [manualAnswerText, setManualAnswerText] = useState("");
+  const [emptyAnswerWarning, setEmptyAnswerWarning] = useState(false);
 
-  // Transcripts & Conversation Turns for Kokonut Synced Transcript
+  // Synced transcripts
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const [activeTurnId, setActiveTurnId] = useState<string | undefined>(undefined);
 
@@ -164,17 +150,25 @@ export function AiInterviewRoom({
   const [scorecard, setScorecard] = useState<InterviewScorecard | null>(null);
   const [expandedAnswerId, setExpandedAnswerId] = useState<string | null>(null);
 
-  // Audio / Speech refs
+  // Refs for video & speech
   const videoRef = useRef<HTMLVideoElement>(null);
   const lobbyVideoRef = useRef<HTMLVideoElement>(null);
-  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
-  const shouldListenRef = useRef<boolean>(false);
-  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastAskedQuestionIdRef = useRef<string | null>(null);
-  const planFetchedRef = useRef<boolean>(false);
+  const planAbortControllerRef = useRef<AbortController | null>(null);
+  const autoAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Callback ref for lobby video to ensure instant attachment on element mount
+  // Audio Recorder Hook
+  const recorder = useAnswerRecorder({
+    stream: isMicMuted ? null : stream,
+    maxDurationSeconds: 120,
+    onMaxDurationReached: () => {
+      handleFinishAnswer();
+    },
+  });
+
+  const recorderRef = useRef(recorder);
+  recorderRef.current = recorder;
+
+  // Video attachment callbacks
   const setLobbyVideo = useCallback(
     (el: HTMLVideoElement | null) => {
       lobbyVideoRef.current = el;
@@ -188,7 +182,6 @@ export function AiInterviewRoom({
     [stream],
   );
 
-  // Callback ref for interview video to ensure instant attachment on element mount
   const setInterviewVideo = useCallback(
     (el: HTMLVideoElement | null) => {
       videoRef.current = el;
@@ -202,7 +195,7 @@ export function AiInterviewRoom({
     [stream, isCameraActive],
   );
 
-  // Lock body scroll on mount
+  // Body scroll lock
   useEffect(() => {
     setMounted(true);
     const origOverflow = document.body.style.overflow;
@@ -212,14 +205,14 @@ export function AiInterviewRoom({
     };
   }, []);
 
-  // Ensure stream is acquired if not yet active
+  // Ensure stream acquired
   useEffect(() => {
     if (!stream) {
       acquire().catch(() => {});
     }
   }, [stream, acquire]);
 
-  // Sync stream to video elements when active
+  // Video stream synchronization
   useEffect(() => {
     if (!stream) return;
 
@@ -238,13 +231,22 @@ export function AiInterviewRoom({
     }
   }, [stage, stream, isCameraActive]);
 
-  // Plan generation on start - strictly guarded to run once per session while in lobby
-  useEffect(() => {
-    if (planFetchedRef.current) return;
-    planFetchedRef.current = true;
-    let active = true;
+  // Plan fetching with language switch support
+  const fetchPlanForLanguage = useCallback(
+    async (lang: "en" | "hi" | "hinglish") => {
+      if (planAbortControllerRef.current) {
+        planAbortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      planAbortControllerRef.current = controller;
 
-    async function fetchPlan() {
+      setIsPlanLoading(true);
+
+      // 8-second safety fallback timeout
+      const fallbackTimer = setTimeout(() => {
+        setIsPlanLoading(false);
+      }, 8000);
+
       try {
         const resp = await fetch("/api/interview/plan", {
           method: "POST",
@@ -253,47 +255,58 @@ export function AiInterviewRoom({
             jobTitle: targetJobTitle,
             jobPosting,
             verificationQuestions,
-            language,
+            language: lang,
+            analysis,
           }),
+          signal: controller.signal,
         });
 
-        if (resp.ok && active) {
+        clearTimeout(fallbackTimer);
+
+        if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data.questions) && data.questions.length > 0) {
             setQuestions(data.questions);
+            setIsPlanLoading(false);
             return;
           }
         }
-      } catch (err) {
-        console.warn("Interview plan API fallback:", err);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+        console.warn("[interview/plan] API fallback:", err);
+      } finally {
+        clearTimeout(fallbackTimer);
       }
 
-      if (active) {
-        // Deterministic fallback
-        const deterministic = generateInterviewQuestions(
-          targetJobTitle,
-          jobPosting,
-          verificationQuestions,
-        );
-        setQuestions(deterministic);
-      }
-    }
+      // Deterministic fallback
+      const deterministic = generateInterviewQuestions(targetJobTitle, jobPosting, {
+        verificationQuestions,
+        language: lang,
+        analysis,
+      });
+      setQuestions(deterministic);
+      setIsPlanLoading(false);
+    },
+    [targetJobTitle, jobPosting, verificationQuestions, analysis],
+  );
 
-    fetchPlan();
-
-    return () => {
-      active = false;
-    };
-  }, [targetJobTitle, jobPosting, verificationQuestions, language]);
-
-  // Prefetch question 1 while candidate is reviewing the lobby
+  // Fetch initial plan on lobby mount
   useEffect(() => {
-    if (stage === "lobby" && questions.length > 0) {
+    if (stage === "lobby") {
+      fetchPlanForLanguage(language);
+    }
+  }, [fetchPlanForLanguage, stage]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Prefetch question 1 in lobby
+  useEffect(() => {
+    if (stage === "lobby" && questions.length > 0 && questions[0]?.question) {
       prefetchSpeech(questions[0].question, language);
     }
   }, [stage, questions, language, prefetchSpeech]);
 
-  // Session Timer: interval only increments once sessionStartedRef becomes true (on first onStart)
+  // Session timer
   useEffect(() => {
     if (stage !== "interview") return;
     const interval = setInterval(() => {
@@ -310,260 +323,99 @@ export function AiInterviewRoom({
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Stop STT
-  const stopSpeechRecognition = useCallback(() => {
-    shouldListenRef.current = false;
-    if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {
-        void e;
-      }
-      recognitionRef.current = null;
-    }
-  }, []);
-
-  // Start STT (Indian English / Hindi support)
-  const startSpeechRecognition = useCallback(() => {
-    if (isMicMuted || stage !== "interview") return;
-
-    const win = window as unknown as {
-      SpeechRecognition?: SpeechRecognitionConstructor;
-      webkitSpeechRecognition?: SpeechRecognitionConstructor;
-    };
-    const SpeechRecognitionClass = win.SpeechRecognition || win.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionClass) {
-      setManualTextMode(true);
-      return;
-    }
-
-    try {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (e) {
-          void e;
-        }
-      }
-
-      const recognition = new SpeechRecognitionClass();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = language === "hi" ? "hi-IN" : "en-IN";
-
-      shouldListenRef.current = true;
-
-      recognition.onstart = () => {
-        setVoiceState("listening");
-      };
-
-      recognition.onresult = (event: BrowserSpeechRecognitionEvent) => {
-        setSilencePrompt(false);
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-
-        // Barge-in check: if Mira is currently speaking, cancel immediately
-        if (isSpeechSpeakingRef.current()) {
-          cancelSpeechRef.current();
-          setVoiceState("listening");
-        }
-
-        let finalTranscript = "";
-        let interimTranscript = "";
-
-        for (let i = 0; i < event.results.length; ++i) {
-          const res = event.results[i];
-          if (!res || !res[0]) continue;
-          const chunk = res[0].transcript;
-          if (res.isFinal) {
-            finalTranscript += chunk + " ";
-          } else {
-            interimTranscript += chunk;
-          }
-        }
-
-        const combined = (finalTranscript + interimTranscript).trim();
-        if (combined) {
-          setCurrentAnswer(combined);
-
-          setTurns((prev) => {
-            const lastTurn = prev[prev.length - 1];
-            if (lastTurn && lastTurn.speaker === "candidate") {
-              setActiveTurnId(lastTurn.id);
-              return [...prev.slice(0, -1), { ...lastTurn, text: combined, isStreaming: true }];
-            } else {
-              const candTurnId = `cand_${Date.now()}`;
-              setActiveTurnId(candTurnId);
-              return [
-                ...prev,
-                {
-                  id: candTurnId,
-                  speaker: "candidate",
-                  speakerName: candidateName,
-                  text: combined,
-                  isStreaming: true,
-                },
-              ];
-            }
-          });
-        }
-      };
-
-      recognition.onerror = (event: BrowserSpeechRecognitionErrorEvent) => {
-        if (event.error === "no-speech") return;
-        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-          setManualTextMode(true);
-          shouldListenRef.current = false;
-        }
-      };
-
-      recognition.onend = () => {
-        if (shouldListenRef.current && !isMicMuted && stage === "interview") {
-          if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
-          restartTimerRef.current = setTimeout(() => {
-            if (shouldListenRef.current && !isMicMuted && stage === "interview") {
-              try {
-                recognition.start();
-              } catch (e) {
-                void e;
-              }
-            }
-          }, 250);
-        }
-      };
-
-      recognition.start();
-      recognitionRef.current = recognition;
-    } catch (err) {
-      console.warn("Speech recognition initialization fallback:", err);
-    }
-  }, [isMicMuted, stage, language, candidateName]);
-
-  const cancelSpeechRef = useRef(cancelSpeech);
-  cancelSpeechRef.current = cancelSpeech;
-  const stopSpeechRecognitionRef = useRef(stopSpeechRecognition);
-  stopSpeechRecognitionRef.current = stopSpeechRecognition;
-  const isSpeechSpeakingRef = useRef(isSpeechSpeaking);
-  isSpeechSpeakingRef.current = isSpeechSpeaking;
-
-  // Clean unmount safety - strictly runs only when component unmounts
-  useEffect(() => {
-    return () => {
-      cancelSpeechRef.current();
-      stopSpeechRecognitionRef.current();
-    };
-  }, []);
-
-  // Track preparation state for the current question
   const currentQ = sessionQuestions[currentIdx];
-  const isPreparing =
-    stage === "interview" && Boolean(currentQ) && revealedQuestionId !== currentQ?.id;
 
-  // Handle Question advance & rotation (strictly depends only on [stage, currentIdx])
+  // Mira question speech function
+  const speakCurrentQuestion = useCallback(
+    async (q: InterviewQuestion) => {
+      setQuestionPhase("preparing");
+      recorderRef.current.cancelRecording();
+
+      const turnId = `mira_q_${q.id}`;
+      setActiveTurnId(turnId);
+
+      // Add turn immediately if not already present
+      setTurns((prev) => {
+        if (prev.some((t) => t.id === turnId)) return prev;
+        return [
+          ...prev,
+          {
+            id: turnId,
+            speaker: "mira",
+            speakerName: "Mira",
+            text: q.question,
+            isStreaming: false,
+          },
+        ];
+      });
+
+      const speakResult = await speakSpeech(q.question, {
+        language,
+        onStart: () => {
+          setQuestionPhase("speaking");
+          if (!sessionStartedRef.current) {
+            sessionStartedRef.current = true;
+          }
+          setQuestionStartTime(Date.now());
+        },
+      });
+
+      if (speakResult === "cancelled") {
+        return;
+      }
+
+      // Auto-listen when Mira finishes speaking
+      setQuestionPhase("recording");
+      setQuestionStartTime(Date.now());
+      setEmptyAnswerWarning(false);
+      recorderRef.current.startRecording();
+
+      // Prefetch next question
+      if (currentIdx + 1 < sessionQuestions.length) {
+        const nextQ = sessionQuestions[currentIdx + 1];
+        if (nextQ?.question) {
+          prefetchSpeech(nextQ.question, language);
+        }
+      }
+    },
+    [speakSpeech, language, currentIdx, sessionQuestions, prefetchSpeech],
+  );
+
+  // Trigger speech on question change during interview
   useEffect(() => {
     if (stage !== "interview" || sessionQuestions.length === 0 || !sessionQuestions[currentIdx]) {
       return;
     }
 
     const q = sessionQuestions[currentIdx];
-
-    // Reset per-question UI states
-    setRevealedQuestionId(null);
-    setVoiceFailedNotice(false);
-    setCurrentAnswer("");
-    stopSpeechRecognition();
-    setSilencePrompt(false);
-    setVoiceState("thinking");
-
     const timer = setTimeout(() => {
-      lastAskedQuestionIdRef.current = q.id;
-
-      speakSpeech(q.question, {
-        language,
-        onStart: () => {
-          // Real sound is audible now! Reveal question and update conversation turn
-          setRevealedQuestionId(q.id);
-          setVoiceState("speaking");
-
-          if (!sessionStartedRef.current) {
-            sessionStartedRef.current = true;
-          }
-          setQuestionStartTime(Date.now());
-
-          const turnId = `mira_q_${q.id}`;
-          setActiveTurnId(turnId);
-          setTurns((prev) => {
-            if (prev.some((t) => t.id === turnId)) {
-              return prev;
-            }
-            return [
-              ...prev,
-              {
-                id: turnId,
-                speaker: "mira",
-                speakerName: "Mira",
-                text: q.question,
-                isStreaming: false,
-              },
-            ];
-          });
-
-          // Prefetch next question
-          if (currentIdx + 1 < sessionQuestions.length) {
-            prefetchSpeech(sessionQuestions[currentIdx + 1].question, language);
-          }
-        },
-      }).then((result) => {
-        if (result === "completed") {
-          setVoiceState("listening");
-          startSpeechRecognition();
-          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-          silenceTimerRef.current = setTimeout(() => setSilencePrompt(true), 4000);
-        } else if (result === "failed") {
-          // Graceful degradation: both engines failed
-          setRevealedQuestionId(q.id);
-          setVoiceFailedNotice(true);
-          setManualTextMode(true);
-          setVoiceState("idle");
-
-          if (!sessionStartedRef.current) {
-            sessionStartedRef.current = true;
-          }
-          setQuestionStartTime(Date.now());
-
-          const turnId = `mira_q_${q.id}`;
-          setActiveTurnId(turnId);
-          setTurns((prev) => {
-            if (prev.some((t) => t.id === turnId)) {
-              return prev;
-            }
-            return [
-              ...prev,
-              {
-                id: turnId,
-                speaker: "mira",
-                speakerName: "Mira",
-                text: q.question,
-                isStreaming: false,
-              },
-            ];
-          });
-        }
-      });
-    }, 400);
+      speakCurrentQuestion(q);
+    }, 300);
 
     return () => {
       clearTimeout(timer);
+      cancelSpeech();
     };
-  }, [stage, currentIdx, sessionQuestions.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stage, currentIdx, sessionQuestions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Start interview from lobby: snapshot questions into sessionQuestions
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cancelSpeech();
+      recorderRef.current.cancelRecording();
+      if (planAbortControllerRef.current) {
+        planAbortControllerRef.current.abort();
+      }
+      if (autoAdvanceTimeoutRef.current) {
+        clearTimeout(autoAdvanceTimeoutRef.current);
+      }
+    };
+  }, [cancelSpeech]);
+
+  // Start interview from lobby
   const handleJoinInterview = async () => {
-    lastAskedQuestionIdRef.current = null;
-    sessionStartedRef.current = false;
+    unlockAudio();
     cancelSpeech();
-    stopSpeechRecognition();
 
     if (!isAcquired) {
       await acquire().catch(() => {});
@@ -571,11 +423,11 @@ export function AiInterviewRoom({
 
     let questionsToUse = questions;
     if (questionsToUse.length === 0) {
-      questionsToUse = generateInterviewQuestions(
-        targetJobTitle,
-        jobPosting,
+      questionsToUse = generateInterviewQuestions(targetJobTitle, jobPosting, {
         verificationQuestions,
-      );
+        language,
+        analysis,
+      });
       setQuestions(questionsToUse);
     }
 
@@ -587,82 +439,21 @@ export function AiInterviewRoom({
     setAnswers({});
     setDurations({});
     setTurns([]);
-    setRevealedQuestionId(null);
-    setVoiceFailedNotice(false);
+    setQuestionPhase("preparing");
+    sessionStartedRef.current = false;
 
-    recordInterviewStarted(userId, jobId, snapshot.length);
+    recordInterviewStarted(userId, jobId, `session_${Date.now()}`);
   };
 
-  // Toggle Camera
-  const handleToggleCamera = () => {
-    const nextState = !isCameraActive;
-    setIsCameraActive(nextState);
-    if (stream) {
-      stream.getVideoTracks().forEach((track) => {
-        track.enabled = nextState;
-      });
-    }
-  };
-
-  // Toggle Mic
-  const handleToggleMic = () => {
-    const nextState = !isMicMuted;
-    setIsMicMuted(nextState);
-    if (stream) {
-      stream.getAudioTracks().forEach((track) => {
-        track.enabled = !nextState;
-      });
-    }
-    if (nextState) {
-      stopSpeechRecognition();
-    } else {
-      startSpeechRecognition();
-    }
-  };
-
-  // Repeat current question: replay audio without appending a duplicate turn
-  const handleRepeatQuestion = () => {
-    if (isPreparing) return;
-    const currentQuestion = sessionQuestions[currentIdx];
-    if (!currentQuestion) return;
-
-    cancelSpeech();
-    stopSpeechRecognition();
-    setVoiceState("thinking");
-
-    speakSpeech(currentQuestion.question, {
-      language,
-      onStart: () => {
-        setVoiceState("speaking");
-      },
-    }).then((result) => {
-      if (result === "completed") {
-        setVoiceState("listening");
-        startSpeechRecognition();
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = setTimeout(() => setSilencePrompt(true), 4000);
-      }
-    });
-  };
-
-  // Finalize scorecard and end session
+  // Evaluation submission
   const completeInterviewEvaluation = async (
     allAnswers: Record<string, string>,
     allDurations: Record<string, number>,
   ) => {
-    cancelSpeech();
-    stopSpeechRecognition();
-    setVoiceState("thinking");
     setStage("evaluating");
-
-    // Finalize all candidate turns
-    setTurns((prev) =>
-      prev.map((t) => (t.speaker === "candidate" ? { ...t, isStreaming: false } : t)),
-    );
-
     const startTime = Date.now();
-    let finalScorecard: InterviewScorecard | null = null;
 
+    let finalScorecard: InterviewScorecard | null = null;
     try {
       const resp = await fetch("/api/interview/evaluate", {
         method: "POST",
@@ -679,9 +470,12 @@ export function AiInterviewRoom({
 
       if (resp.ok) {
         finalScorecard = await resp.json();
+      } else {
+        const bodySnippet = await resp.text().catch(() => "");
+        console.warn(`[interview/evaluate] status ${resp.status}: ${bodySnippet.slice(0, 300)}`);
       }
     } catch (err) {
-      console.warn("Interview evaluation API fallback:", err);
+      console.warn("[interview/evaluate] API fallback:", err);
     }
 
     if (!finalScorecard) {
@@ -691,10 +485,10 @@ export function AiInterviewRoom({
         sessionQuestions,
         allAnswers,
         allDurations,
+        language,
       );
     }
 
-    // Ensure candidate experiences the loading animation smoothly for at least 2.5 seconds
     const elapsed = Date.now() - startTime;
     if (elapsed < 2500) {
       await new Promise((r) => setTimeout(r, 2500 - elapsed));
@@ -705,57 +499,104 @@ export function AiInterviewRoom({
     setStage("scorecard");
   };
 
-  // Advance to Next Question
-  const handleNextQuestion = async () => {
-    if (isPreparing) return;
-
-    cancelSpeech();
-    stopSpeechRecognition();
-
-    // Mark active streaming turns as completed
-    setTurns((prev) =>
-      prev.map((t) => (t.speaker === "candidate" ? { ...t, isStreaming: false } : t)),
-    );
-
-    const currentQuestion = sessionQuestions[currentIdx];
-    if (!currentQuestion) return;
+  // Save answer and advance or finish
+  const commitAnswerAndAdvance = (answerText: string) => {
+    const q = sessionQuestions[currentIdx];
+    if (!q) return;
 
     const timeSpent = Math.max(5, Math.round((Date.now() - questionStartTime) / 1000));
-    const finalAnswer = currentAnswer.trim();
+    const cleanAnswer = answerText.trim();
 
-    const updatedAnswers = { ...answers, [currentQuestion.id]: finalAnswer };
-    const updatedDurations = { ...durations, [currentQuestion.id]: timeSpent };
+    const updatedAnswers = { ...answers, [q.id]: cleanAnswer };
+    const updatedDurations = { ...durations, [q.id]: timeSpent };
 
     setAnswers(updatedAnswers);
     setDurations(updatedDurations);
 
-    recordInterviewProgress(userId, jobId, currentIdx + 1, sessionQuestions.length);
+    // Add candidate turn to transcript
+    const turnId = `candidate_ans_${q.id}`;
+    setTurns((prev) => [
+      ...prev,
+      {
+        id: turnId,
+        speaker: "candidate",
+        speakerName: candidateName,
+        text: cleanAnswer || "[unanswered]",
+        isStreaming: false,
+      },
+    ]);
+
+    recordInterviewProgress(userId, jobId, {
+      currentIdx: currentIdx + 1,
+      answers: updatedAnswers,
+      durations: updatedDurations,
+      sessionSeconds,
+    });
 
     if (currentIdx < sessionQuestions.length - 1) {
       setCurrentIdx((prev) => prev + 1);
+      setManualAnswerText("");
+      setEmptyAnswerWarning(false);
     } else {
       completeInterviewEvaluation(updatedAnswers, updatedDurations);
     }
   };
 
+  // Finish answer handler: stops recorder, transcribes, advances
+  const handleFinishAnswer = async () => {
+    if (questionPhase === "processing") return;
+
+    setQuestionPhase("processing");
+    cancelSpeech();
+
+    const audioBlob = await recorder.stopRecording();
+
+    let transcribedText = "";
+    if (audioBlob && audioBlob.size > 500) {
+      try {
+        const result = await transcribeAudioBlob(audioBlob, language);
+        transcribedText = result.transcript;
+      } catch (err) {
+        console.warn("[AiInterviewRoom] Transcription failed:", err);
+      }
+    }
+
+    // Check if answer is empty
+    if (!transcribedText || transcribedText.trim().length === 0) {
+      setEmptyAnswerWarning(true);
+      setQuestionPhase("recording");
+      return;
+    }
+
+    commitAnswerAndAdvance(transcribedText);
+  };
+
+  // Submit manual text answer
+  const handleSubmitManualText = () => {
+    if (!manualAnswerText.trim()) {
+      setEmptyAnswerWarning(true);
+      return;
+    }
+    commitAnswerAndAdvance(manualAnswerText.trim());
+    setManualAnswerText("");
+    setManualTextMode(false);
+  };
+
   // Confirm End Interview early
   const handleConfirmEndEarly = () => {
     cancelSpeech();
-    stopSpeechRecognition();
+    recorder.cancelRecording();
     setShowEndConfirm(false);
 
-    const currentQuestion = sessionQuestions[currentIdx];
-    const finalAnswer = currentAnswer.trim();
+    const q = sessionQuestions[currentIdx];
+    const timeSpent = Math.max(5, Math.round((Date.now() - questionStartTime) / 1000));
     const updatedAnswers = {
       ...answers,
-      [currentQuestion?.id || `q_${currentIdx}`]: finalAnswer,
+      [q?.id || `q_${currentIdx}`]: manualAnswerText.trim() || "[unanswered]",
     };
     const updatedDurations = {
       ...durations,
-      [currentQuestion?.id || `q_${currentIdx}`]: Math.max(
-        5,
-        Math.round((Date.now() - questionStartTime) / 1000),
-      ),
+      [q?.id || `q_${currentIdx}`]: timeSpent,
     };
 
     completeInterviewEvaluation(updatedAnswers, updatedDurations);
@@ -764,8 +605,7 @@ export function AiInterviewRoom({
   // Retake interview
   const handleRetake = () => {
     cancelSpeech();
-    stopSpeechRecognition();
-    lastAskedQuestionIdRef.current = null;
+    recorder.cancelRecording();
     sessionStartedRef.current = false;
     setStage("lobby");
     setCurrentIdx(0);
@@ -773,24 +613,31 @@ export function AiInterviewRoom({
     setAnswers({});
     setDurations({});
     setTurns([]);
-    setRevealedQuestionId(null);
-    setVoiceFailedNotice(false);
+    setQuestionPhase("preparing");
   };
 
   // Done button navigation
   const handleDone = () => {
     cancelSpeech();
-    stopSpeechRecognition();
+    recorder.cancelRecording();
     release();
     onClose();
     navigate({ to: "/dashboard" });
   };
 
-  // Close handler for lobby X button
+  // Close modal
   const handleClose = () => {
     cancelSpeech();
-    stopSpeechRecognition();
+    recorder.cancelRecording();
     onClose();
+  };
+
+  // Determine VoicePill state
+  const getVoicePillState = (): VoiceState => {
+    if (questionPhase === "speaking" || speechPhase === "speaking") return "speaking";
+    if (questionPhase === "recording") return "listening";
+    if (questionPhase === "processing") return "thinking";
+    return "idle";
   };
 
   if (!mounted) return null;
@@ -853,7 +700,7 @@ export function AiInterviewRoom({
                           if (!stream) {
                             acquire().catch(() => {});
                           } else {
-                            handleToggleCamera();
+                            setIsCameraActive(true);
                           }
                         }}
                         className="px-3 py-1 rounded-full bg-[#1a1a1a] text-[11px] text-[#f5f5f5] border border-white/10 hover:bg-[#262626] transition-colors"
@@ -898,16 +745,16 @@ export function AiInterviewRoom({
                     How your AI interview works.
                   </h4>
                   <p className="text-[13px] text-[#8a8a8a] leading-relaxed">
-                    Mira asks 5 structured, spoken-length questions covering resume verification,
-                    technical depth, and system trade-offs. Your spoken answers are transcribed in
-                    real time.
+                    Mira asks 5 structured, spoken-length questions covering role fundamentals,
+                    technical depth, and system trade-offs. Mira automatically listens after each
+                    question.
                   </p>
                 </div>
 
                 <div className="space-y-2.5 text-[12px] text-[#8a8a8a]">
                   <div className="flex items-start gap-2.5">
                     <CheckCircle2 size={15} className="text-emerald-400 shrink-0 mt-0.5" />
-                    <span>Barge-in supported: speak naturally at any point to interrupt.</span>
+                    <span>Auto-listening begins as soon as Mira finishes speaking.</span>
                   </div>
                   <div className="flex items-start gap-2.5">
                     <CheckCircle2 size={15} className="text-emerald-400 shrink-0 mt-0.5" />
@@ -919,13 +766,18 @@ export function AiInterviewRoom({
                   </div>
                 </div>
 
-                <div className="pt-2 flex items-center gap-2">
+                {/* Language Mode Toggle */}
+                <div className="pt-2 flex items-center gap-2 flex-wrap">
                   <span className="text-[12px] text-[#8a8a8a] mr-2">Language:</span>
                   {(["en", "hi", "hinglish"] as const).map((lang) => (
                     <button
                       key={lang}
                       type="button"
-                      onClick={() => setLanguage(lang)}
+                      onClick={() => {
+                        unlockAudio();
+                        setLanguage(lang);
+                        fetchPlanForLanguage(lang);
+                      }}
                       className={`px-3 py-1.5 rounded-full text-[12px] font-[600] transition-colors ${
                         language === lang
                           ? "bg-[#f5f5f5] text-[#0a0a0a]"
@@ -935,13 +787,20 @@ export function AiInterviewRoom({
                       {lang === "en" ? "English" : lang === "hi" ? "Hindi (हिन्दी)" : "Hinglish"}
                     </button>
                   ))}
+                  {isPlanLoading && (
+                    <span className="text-[11px] text-[#0066ff] flex items-center gap-1">
+                      <RefreshCw size={11} className="animate-spin" />
+                      <span>Loading questions...</span>
+                    </span>
+                  )}
                 </div>
 
                 <div className="pt-4">
                   <button
                     type="button"
+                    disabled={isPlanLoading}
                     onClick={handleJoinInterview}
-                    className="inline-flex h-11 items-center gap-2 rounded-full bg-[#f5f5f5] px-7 text-[14px] font-[600] text-[#0a0a0a] hover:bg-[#e0e0e0] transition-colors"
+                    className="inline-flex h-11 items-center gap-2 rounded-full bg-[#f5f5f5] px-7 text-[14px] font-[600] text-[#0a0a0a] hover:bg-[#e0e0e0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span>Enter interview room</span>
                     <ArrowRight size={15} />
@@ -982,20 +841,20 @@ export function AiInterviewRoom({
                           <span className="text-[11px] text-[#8a8a8a]">· Technical Panel</span>
                         </div>
                         <span className="text-[11px] text-[#8a8a8a] block">
-                          {isPreparing
-                            ? "Preparing the question..."
-                            : voiceState === "speaking"
-                              ? "Speaking question..."
-                              : voiceState === "thinking"
-                                ? "Reflecting on answer..."
-                                : "Listening to candidate..."}
+                          {questionPhase === "preparing"
+                            ? STATUS_TEXTS[language].preparingQuestion
+                            : questionPhase === "speaking"
+                              ? STATUS_TEXTS[language].miraAsking
+                              : questionPhase === "processing"
+                                ? STATUS_TEXTS[language].processing
+                                : STATUS_TEXTS[language].listeningToCandidate}
                         </span>
                       </div>
                     </div>
 
                     <VoicePill
-                      state={voiceState}
-                      audioLevel={audioLevel}
+                      state={getVoicePillState()}
+                      audioLevel={questionPhase === "recording" ? recorder.peakLevel : audioLevel}
                       isTtsSpeaking={speechPhase === "speaking"}
                     />
                   </div>
@@ -1003,18 +862,28 @@ export function AiInterviewRoom({
                   <div className="flex items-center justify-between pt-2 border-t border-[rgba(255,255,255,0.06)] text-[12px]">
                     <button
                       type="button"
-                      disabled={isPreparing}
-                      onClick={handleRepeatQuestion}
+                      disabled={questionPhase === "preparing" || questionPhase === "speaking"}
+                      onClick={() => {
+                        unlockAudio();
+                        speakCurrentQuestion(currentQ);
+                      }}
                       className={cn(
                         "inline-flex items-center gap-1.5 text-[#8a8a8a] transition-colors",
-                        isPreparing ? "opacity-50 cursor-not-allowed" : "hover:text-[#f5f5f5]",
+                        questionPhase === "preparing" || questionPhase === "speaking"
+                          ? "opacity-50 cursor-not-allowed"
+                          : "hover:text-[#f5f5f5]",
                       )}
                     >
                       <Volume2 size={13} />
                       <span>Repeat question</span>
                     </button>
                     <span className="text-[11px] text-[#5c5c5c] capitalize">
-                      Language: {language}
+                      Language:{" "}
+                      {language === "hi"
+                        ? "Hindi"
+                        : language === "hinglish"
+                          ? "Hinglish"
+                          : "English"}
                     </span>
                   </div>
                 </div>
@@ -1057,7 +926,7 @@ export function AiInterviewRoom({
                             if (!stream) {
                               acquire().catch(() => {});
                             } else {
-                              handleToggleCamera();
+                              setIsCameraActive(true);
                             }
                           }}
                           className="px-3 py-1 rounded-full bg-[#1a1a1a] text-[11px] text-[#f5f5f5] border border-white/10 hover:bg-[#262626] transition-colors"
@@ -1075,7 +944,7 @@ export function AiInterviewRoom({
                     <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
                       <button
                         type="button"
-                        onClick={handleToggleMic}
+                        onClick={() => setIsMicMuted(!isMicMuted)}
                         className={`h-7 w-7 rounded-full flex items-center justify-center backdrop-blur-md border transition-colors ${
                           isMicMuted
                             ? "bg-red-500/80 border-red-500/40 text-white"
@@ -1088,7 +957,7 @@ export function AiInterviewRoom({
 
                       <button
                         type="button"
-                        onClick={handleToggleCamera}
+                        onClick={() => setIsCameraActive(!isCameraActive)}
                         className={`h-7 w-7 rounded-full flex items-center justify-center backdrop-blur-md border transition-colors ${
                           !isCameraActive
                             ? "bg-red-500/80 border-red-500/40 text-white"
@@ -1109,14 +978,26 @@ export function AiInterviewRoom({
                     <span className="flex items-center gap-1.5">
                       <Mic
                         size={12}
-                        className={audioLevel > 0.15 ? "text-emerald-400" : "text-[#707070]"}
+                        className={
+                          (recorder.isRecording ? recorder.peakLevel : audioLevel) > 0.15
+                            ? "text-emerald-400"
+                            : "text-[#707070]"
+                        }
                       />
                       <span>Mic Input {isMicMuted ? "(Muted)" : ""}</span>
                     </span>
                     <div className="w-28 h-1.5 rounded-full bg-[#1a1a1a] overflow-hidden">
                       <div
                         className="h-full bg-emerald-400 transition-all duration-75"
-                        style={{ width: `${isMicMuted ? 0 : Math.round(audioLevel * 100)}%` }}
+                        style={{
+                          width: `${
+                            isMicMuted
+                              ? 0
+                              : Math.round(
+                                  (recorder.isRecording ? recorder.peakLevel : audioLevel) * 100,
+                                )
+                          }%`,
+                        }}
                       />
                     </div>
                   </div>
@@ -1136,6 +1017,10 @@ export function AiInterviewRoom({
                     <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#141414] text-[12px] font-[600] text-[#0066ff] border border-[rgba(255,255,255,0.08)]">
                       Question {currentIdx + 1} of {sessionQuestions.length}
                     </span>
+
+                    <span className="text-[11px] font-[500] text-[#8a8a8a]">
+                      · {currentQ.phaseLabel}
+                    </span>
                   </div>
 
                   <button
@@ -1147,16 +1032,8 @@ export function AiInterviewRoom({
                   </button>
                 </div>
 
-                {/* Voice failure fallback notice */}
-                {voiceFailedNotice && (
-                  <div className="rounded-[16px] bg-[#1a1a1a] border border-amber-500/20 px-4 py-3 text-[12px] text-amber-300">
-                    Voice audio is currently unavailable. Please follow the live transcript below
-                    and answer using voice or text.
-                  </div>
-                )}
-
                 {/* Synced Transcript Component */}
-                <div className="rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-4 min-h-[280px] max-h-[440px] overflow-hidden flex flex-col">
+                <div className="rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-4 min-h-[260px] max-h-[380px] overflow-hidden flex flex-col">
                   <span className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider mb-2 block">
                     Live Transcript
                   </span>
@@ -1164,36 +1041,26 @@ export function AiInterviewRoom({
                     turns={turns}
                     candidateName={candidateName}
                     activeTurnId={activeTurnId}
-                    speechProgress={
-                      speechPhase === "speaking" || speechProgress.isComplete
-                        ? {
+                    {...(speechPhase === "speaking" || speechProgress.isComplete
+                      ? {
+                          speechProgress: {
                             turnId: activeTurnId || "",
                             wordIndex: speechProgress.wordIndex,
                             isComplete: speechProgress.isComplete,
-                          }
-                        : undefined
-                    }
-                    isPreparingNextQuestion={isPreparing}
+                          },
+                        }
+                      : {})}
+                    isPreparingNextQuestion={questionPhase === "preparing"}
                     className="flex-1"
                   />
                 </div>
 
-                {/* Silence prompt */}
-                {silencePrompt && (
-                  <div className="rounded-[14px] bg-[#1a1a1a] border border-[rgba(255,255,255,0.06)] px-4 py-2 text-[12px] text-[#8a8a8a] text-center animate-in fade-in">
-                    Take your time, or tap Submit when ready.
-                  </div>
-                )}
-
-                {/* Response & Control Bar */}
+                {/* Controlled Response Area */}
                 <div className="rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-4 space-y-3">
                   <div className="flex items-center justify-between text-[12px] text-[#8a8a8a]">
-                    <div className="flex items-center gap-2">
-                      <Radio size={13} className="text-emerald-400 animate-pulse" />
-                      <span className="text-emerald-400 font-[600]">
-                        {manualTextMode ? "Manual Text Mode" : "Voice Detection Active"}
-                      </span>
-                    </div>
+                    <span className="text-[12px] font-[600] text-[#f5f5f5]">
+                      {manualTextMode ? "Type Your Response" : "Voice Response"}
+                    </span>
 
                     <button
                       type="button"
@@ -1205,49 +1072,78 @@ export function AiInterviewRoom({
                     </button>
                   </div>
 
-                  {manualTextMode ? (
-                    <textarea
-                      rows={3}
-                      value={currentAnswer}
-                      onChange={(e) => setCurrentAnswer(e.target.value)}
-                      placeholder="Type your response here..."
-                      className="w-full p-3.5 rounded-[16px] bg-[#1a1a1a] border-0 text-[13px] text-[#f5f5f5] placeholder-[#5c5c5c] focus:outline-none focus:ring-2 focus:ring-[#f5f5f5]"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center py-1">
-                      <AI_Voice
-                        compact
-                        level={audioLevel}
-                        onStop={() => handleNextQuestion()}
-                        onSend={() => handleNextQuestion()}
-                      />
+                  {/* Empty answer warning prompt */}
+                  {emptyAnswerWarning && (
+                    <div className="rounded-[16px] bg-[#1a1a1a] border border-amber-500/30 p-3 text-[12px] text-amber-300 space-y-2">
+                      <p>
+                        We could not detect a response. Would you like to record again, type your
+                        answer, or skip to the next question?
+                      </p>
+                      <div className="flex items-center gap-2 pt-1 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmptyAnswerWarning(false);
+                            setQuestionPhase("recording");
+                            recorder.startRecording();
+                          }}
+                          className="px-3 py-1 rounded-full bg-[#f5f5f5] text-[#0a0a0a] text-[11px] font-[600] hover:bg-[#e0e0e0] transition-colors"
+                        >
+                          Record again
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmptyAnswerWarning(false);
+                            setManualTextMode(true);
+                          }}
+                          className="px-3 py-1 rounded-full bg-[#141414] border border-white/10 text-[#f5f5f5] text-[11px] font-[600] hover:bg-[#262626] transition-colors"
+                        >
+                          Type answer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmptyAnswerWarning(false);
+                            commitAnswerAndAdvance("[skipped]");
+                          }}
+                          className="px-3 py-1 rounded-full bg-transparent text-[#8a8a8a] text-[11px] hover:text-[#f5f5f5] transition-colors"
+                        >
+                          Skip question
+                        </button>
+                      </div>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] text-[#5c5c5c]">
-                      {currentAnswer.trim().split(/\s+/).filter(Boolean).length} words transcribed
-                    </span>
-
-                    <button
-                      type="button"
-                      disabled={isPreparing}
-                      onClick={handleNextQuestion}
-                      className={cn(
-                        "inline-flex h-11 items-center gap-2 rounded-full px-7 text-[14px] font-[600] transition-colors",
-                        isPreparing
-                          ? "bg-[#1a1a1a] text-[#707070] opacity-50 cursor-not-allowed"
-                          : "bg-[#f5f5f5] text-[#0a0a0a] hover:bg-[#e0e0e0] active:scale-[0.98]",
-                      )}
-                    >
-                      <span>
-                        {currentIdx < sessionQuestions.length - 1
-                          ? "Submit & Next Question"
-                          : "Submit & Complete"}
-                      </span>
-                      <ArrowRight size={15} />
-                    </button>
-                  </div>
+                  {manualTextMode ? (
+                    <div className="space-y-3">
+                      <textarea
+                        rows={3}
+                        value={manualAnswerText}
+                        onChange={(e) => setManualAnswerText(e.target.value)}
+                        placeholder="Type your response here..."
+                        className="w-full p-3.5 rounded-[16px] bg-[#1a1a1a] border-0 text-[13px] text-[#f5f5f5] placeholder-[#5c5c5c] focus:outline-none focus:ring-2 focus:ring-[#f5f5f5]"
+                      />
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleSubmitManualText}
+                          className="inline-flex h-10 items-center gap-2 rounded-full bg-[#f5f5f5] px-6 text-[13px] font-[600] text-[#0a0a0a] hover:bg-[#e0e0e0] transition-colors"
+                        >
+                          <span>Submit answer</span>
+                          <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <AnswerRecorder
+                      phase={questionPhase}
+                      durationSeconds={recorder.durationSeconds}
+                      peakLevel={recorder.peakLevel}
+                      language={language}
+                      onStopAndSubmit={handleFinishAnswer}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -1297,7 +1193,6 @@ export function AiInterviewRoom({
         {stage === "evaluating" && (
           <div className="flex-1 flex flex-col items-center justify-center min-h-[520px] w-full max-w-2xl mx-auto px-4 py-12 text-center animate-in fade-in duration-300">
             <div className="w-full rounded-[24px] bg-[#141414] border border-[rgba(255,255,255,0.10)] p-8 sm:p-12 space-y-8 relative">
-              {/* Kokonut UI Animated Wave Text Loader */}
               <div className="py-2">
                 <AITextLoading
                   texts={[
@@ -1315,7 +1210,6 @@ export function AiInterviewRoom({
                 />
               </div>
 
-              {/* Editorial context */}
               <div className="space-y-3 max-w-md mx-auto pt-2 border-t border-[rgba(255,255,255,0.06)]">
                 <p className="text-[13px] text-[#8a8a8a] leading-relaxed">
                   Every score links directly back to transcripts and verified evidence. Human
@@ -1332,15 +1226,22 @@ export function AiInterviewRoom({
         )}
 
         {/* ========================================================= */}
-        {/* STAGE 3: RESULTS SCREEN DECLUTTER                         */}
+        {/* STAGE 3: RESULTS SCORECARD                                */}
         {/* ========================================================= */}
         {stage === "scorecard" && scorecard && (
           <div className="flex-1 max-w-[1100px] w-full mx-auto space-y-8 animate-in fade-in duration-300">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[rgba(255,255,255,0.08)] pb-5">
               <div>
-                <span className="text-[12px] font-[600] text-[#8a8a8a] block mb-1">
-                  Interview Performance Scorecard.
-                </span>
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="text-[12px] font-[600] text-[#8a8a8a]">
+                    Interview Performance Scorecard
+                  </span>
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#1a1a1a] text-[#8a8a8a] border border-white/10">
+                    {scorecard.lowConfidence
+                      ? "Fallback keyword scorer · low confidence"
+                      : `Scored by ${scorecard.modelUsed}`}
+                  </span>
+                </div>
                 <h1 className="text-[26px] sm:text-[32px] font-[650] text-[#f5f5f5] tracking-tight leading-tight">
                   Interview evaluation.
                 </h1>
@@ -1372,40 +1273,48 @@ export function AiInterviewRoom({
               </div>
             </div>
 
-            <AppleActivityCard
-              title="Competency Activity Rings"
-              overallScore={scorecard.overallScore}
-              activities={[
-                {
-                  label: "Technical Accuracy",
-                  current: scorecard.categories.technicalAccuracy,
-                  target: 100,
-                  color: "#f5f5f5",
-                  colorEnd: "#e0e0e0",
-                  size: 200,
-                  description: "Grounded technical depth, core stack mechanisms, and architecture",
-                },
-                {
-                  label: "Communication Clarity",
-                  current: scorecard.categories.communicationClarity,
-                  target: 100,
-                  color: "#a3a3a3",
-                  colorEnd: "#8a8a8a",
-                  size: 160,
-                  description: "Structured responses, articulate reasoning, and concise delivery",
-                },
-                {
-                  label: "Problem Solving",
-                  current: scorecard.categories.problemSolving,
-                  target: 100,
-                  color: "#525252",
-                  colorEnd: "#404040",
-                  size: 120,
-                  description: "System engineering judgment, trade-offs, and pragmatic decisions",
-                },
-              ]}
-            />
+            {/* Apple Activity Rings with unified score tone */}
+            <div className="space-y-2">
+              <AppleActivityCard
+                title="Competency Activity Rings"
+                overallScore={scorecard.overallScore}
+                activities={[
+                  {
+                    label: "Technical Accuracy",
+                    current: scorecard.categories.technicalAccuracy,
+                    target: 100,
+                    color: scoreTone(scorecard.categories.technicalAccuracy).color,
+                    colorEnd: scoreTone(scorecard.categories.technicalAccuracy).color,
+                    size: 200,
+                    description:
+                      "Grounded technical depth, core stack mechanisms, and architecture",
+                  },
+                  {
+                    label: "Communication Clarity",
+                    current: scorecard.categories.communicationClarity,
+                    target: 100,
+                    color: scoreTone(scorecard.categories.communicationClarity).color,
+                    colorEnd: scoreTone(scorecard.categories.communicationClarity).color,
+                    size: 160,
+                    description: "Structured responses, articulate reasoning, and concise delivery",
+                  },
+                  {
+                    label: "Problem Solving",
+                    current: scorecard.categories.problemSolving,
+                    target: 100,
+                    color: scoreTone(scorecard.categories.problemSolving).color,
+                    colorEnd: scoreTone(scorecard.categories.problemSolving).color,
+                    size: 120,
+                    description: "System engineering judgment, trade-offs, and pragmatic decisions",
+                  },
+                ]}
+              />
+              <p className="text-[11px] text-[#707070] text-center">
+                Rings show 3 of 6 rubric components; the overall score uses all six.
+              </p>
+            </div>
 
+            {/* Summary Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-5 space-y-2.5">
                 <span className="text-[12px] font-[650] text-[#f5f5f5] block">
@@ -1447,23 +1356,23 @@ export function AiInterviewRoom({
               </div>
             </div>
 
+            {/* Question-by-Question Audit & Transcripts */}
             <div className="space-y-4">
-              <h3 className="text-[18px] font-[650] text-[#f5f5f5]">
-                Question-by-Question Audit & Transcripts.
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-[18px] font-[650] text-[#f5f5f5]">
+                  Question-by-Question Audit & Transcripts.
+                </h3>
+                <span className="text-[12px] text-[#8a8a8a]">
+                  Overall = average of question scores
+                </span>
+              </div>
 
               <div className="space-y-3">
                 {scorecard.answers.map((item, idx) => {
                   const isExpanded =
                     expandedAnswerId === item.questionId ||
                     (expandedAnswerId === null && idx === 0);
-                  const qCompositeScore = Math.round(
-                    item.metrics.technicalScore * 0.5 +
-                      item.metrics.relevanceScore * 0.3 +
-                      item.metrics.clarityScore * 0.2,
-                  );
-                  const isLowScore = qCompositeScore < 40;
-                  const isHighScore = qCompositeScore >= 70;
+                  const tone = scoreTone(item.compositeScore);
 
                   return (
                     <div
@@ -1485,58 +1394,108 @@ export function AiInterviewRoom({
                         </div>
                         <div className="flex items-center gap-3 shrink-0 ml-4">
                           <span
-                            className={`text-[13px] font-[650] tabular ${
-                              isLowScore
-                                ? "text-red-400"
-                                : isHighScore
-                                  ? "text-emerald-400"
-                                  : "text-[#f5f5f5]"
-                            }`}
+                            className="text-[13px] font-[650] tabular px-2.5 py-0.5 rounded-full"
+                            style={{ color: tone.color, backgroundColor: tone.badgeBg }}
                           >
-                            Score: {qCompositeScore}/100
+                            Score: {item.compositeScore}/100
                           </span>
                           {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </div>
                       </button>
 
                       {isExpanded && (
-                        <div className="pt-3 border-t border-[rgba(255,255,255,0.06)] space-y-3.5 text-[13px] animate-in fade-in duration-150">
-                          <div className="space-y-1">
+                        <div className="pt-3 border-t border-[rgba(255,255,255,0.06)] space-y-4 text-[13px] animate-in fade-in duration-150">
+                          <p className="text-[11px] text-[#707070]">
+                            Question score = weighted rubric average. Overall = average of question
+                            scores.
+                          </p>
+
+                          {/* Transcribed Candidate Response */}
+                          <div className="space-y-1.5">
                             <span className="text-[11px] font-[600] text-[#8a8a8a] block">
                               Transcribed Candidate Response:
                             </span>
-                            <p
-                              className={`p-3.5 rounded-[14px] text-[13px] leading-relaxed italic ${
-                                isLowScore
-                                  ? "bg-red-500/10 text-red-300 border border-red-500/20"
-                                  : "bg-[#1a1a1a] text-[#d4d4d4]"
-                              }`}
-                            >
+                            <p className="p-3.5 rounded-[14px] bg-[#1a1a1a] text-[#d4d4d4] text-[13px] leading-relaxed italic">
                               "{item.transcribedAnswer}"
                             </p>
+
+                            {/* English translation if applicable */}
+                            {item.englishTranslation && (
+                              <div className="p-3 rounded-[12px] bg-[#1a1a1a]/70 border border-white/5 text-[12px] text-[#8a8a8a] space-y-1">
+                                <span className="font-[600] text-[#f5f5f5] block text-[11px]">
+                                  English Translation:
+                                </span>
+                                <p className="italic">"{item.englishTranslation}"</p>
+                              </div>
+                            )}
+
+                            {/* Verbatim Evidence Quotes */}
+                            {item.evidenceQuotes && item.evidenceQuotes.length > 0 && (
+                              <div className="pt-1.5 space-y-1">
+                                <span className="text-[11px] font-[600] text-[#8a8a8a] flex items-center gap-1.5">
+                                  <Quote size={12} className="text-[#0066ff]" />
+                                  <span>Grounded Evidence Quotes:</span>
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {item.evidenceQuotes.map((quote, qIdx) => (
+                                    <span
+                                      key={qIdx}
+                                      className="inline-flex items-center px-2.5 py-1 rounded-full bg-[#1a1a1a] border border-white/10 text-[11px] text-[#f5f5f5]"
+                                    >
+                                      "{quote}"
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
 
-                          <div className="grid grid-cols-3 gap-2.5 text-center">
-                            <div className="rounded-[12px] bg-[#1a1a1a] p-2.5 border border-[rgba(255,255,255,0.06)]">
-                              <span className="text-[11px] text-[#8a8a8a] block">Technical</span>
-                              <span className="text-[14px] font-[650] text-[#f5f5f5]">
-                                {item.metrics.technicalScore}%
-                              </span>
-                            </div>
-                            <div className="rounded-[12px] bg-[#1a1a1a] p-2.5 border border-[rgba(255,255,255,0.06)]">
-                              <span className="text-[11px] text-[#8a8a8a] block">Clarity</span>
-                              <span className="text-[14px] font-[650] text-[#f5f5f5]">
-                                {item.metrics.clarityScore}%
-                              </span>
-                            </div>
-                            <div className="rounded-[12px] bg-[#1a1a1a] p-2.5 border border-[rgba(255,255,255,0.06)]">
-                              <span className="text-[11px] text-[#8a8a8a] block">Relevance</span>
-                              <span className="text-[14px] font-[650] text-[#f5f5f5]">
-                                {item.metrics.relevanceScore}%
-                              </span>
+                          {/* All 6 Rubric Dimensions with weights */}
+                          <div className="space-y-2">
+                            <span className="text-[11px] font-[600] text-[#8a8a8a] block">
+                              6-Dimensional Rubric Breakdown:
+                            </span>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 text-left">
+                              {(Object.keys(RUBRIC_WEIGHTS) as RubricKey[]).map((dimKey) => {
+                                const val = item.rubric[dimKey];
+                                const dimTone = val !== null ? scoreTone(val) : null;
+                                const meta = RUBRIC_LABELS[dimKey];
+
+                                return (
+                                  <div
+                                    key={dimKey}
+                                    className="rounded-[12px] bg-[#1a1a1a] p-2.5 border border-[rgba(255,255,255,0.06)] space-y-1"
+                                  >
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="text-[#8a8a8a] truncate">{meta.label}</span>
+                                      <span className="text-[#5c5c5c] shrink-0 font-[600]">
+                                        {meta.weight}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span
+                                        className="text-[14px] font-[650] tabular"
+                                        style={{ color: dimTone ? dimTone.color : "#5c5c5c" }}
+                                      >
+                                        {val !== null ? `${val}%` : "—"}
+                                      </span>
+                                    </div>
+                                    <div className="h-1 rounded-full bg-[#141414] overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full transition-all"
+                                        style={{
+                                          width: `${val !== null ? val : 0}%`,
+                                          backgroundColor: dimTone ? dimTone.color : "#333",
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
 
+                          {/* Strengths & Improvements */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
                             <div className="space-y-1">
                               <span className="font-[600] text-emerald-400 block">
@@ -1561,6 +1520,7 @@ export function AiInterviewRoom({
                             </div>
                           </div>
 
+                          {/* Benchmark Outline */}
                           <div className="p-3.5 rounded-[14px] bg-[#1a1a1a]/60 border border-[rgba(255,255,255,0.06)] space-y-1 text-[12px]">
                             <span className="font-[600] text-[#f5f5f5] block">
                               Mira's Benchmark Guide:

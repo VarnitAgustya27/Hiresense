@@ -8,6 +8,7 @@ Type: Video · Length: 3 min 39 s
 
 This is the problem statement.
 We are to design the low level architecture of a payment tracking app. Here are some of it's features:
+
 - Adding expenses
 
 - Editing expenses
@@ -361,7 +362,7 @@ Both of our tests worked. You can write more edge cases for tests over here, but
 
 File: assets/threadexecutiononmultiplecores-201021-164202.png
 
-## Conclusion and  Tips
+## Conclusion and Tips
 
 Type: Video · Length: 3 min 2 s
 

@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
-import { ShieldCheck, Info } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import type { ScoreBreakdown } from "@/lib/ai-analyzer";
+import { scoreTone } from "@/lib/score-tone";
 
 interface AnalysisScoreCardProps {
   score: number;
@@ -23,12 +24,7 @@ export function AnalysisScoreCard({
   const radius = 64;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (score / 100) * circumference;
-
-  const getTierColor = () => {
-    if (score >= 78) return "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
-    if (score >= 60) return "text-amber-400 bg-amber-500/10 border-amber-500/30";
-    return "text-zinc-400 bg-zinc-500/10 border-zinc-500/30";
-  };
+  const tone = scoreTone(score);
 
   const categories = [
     { label: "Technical & Skills Match", weight: "40%", score: breakdown.skills_score },
@@ -52,13 +48,16 @@ export function AnalysisScoreCard({
 
         <div className="flex items-center gap-2 self-start sm:self-center">
           <span
-            className={`inline-flex items-center px-3.5 py-1 rounded-full text-[12px] font-[650] border ${getTierColor()}`}
+            className="inline-flex items-center px-3.5 py-1 rounded-full text-[12px] font-[650] border"
+            style={{
+              color: tone.solid,
+              backgroundColor: tone.soft,
+              borderColor: tone.border,
+            }}
           >
             {fitLevel}
           </span>
-          <span className="text-[12px] text-[#707070] font-mono">
-            {modelUsed ? `Model: ${modelUsed}` : "Evidence Verified"}
-          </span>
+          <span className="text-[12px] text-[#707070] font-mono">Evidence Verified</span>
         </div>
       </div>
 
@@ -82,7 +81,7 @@ export function AnalysisScoreCard({
                 cx="80"
                 cy="80"
                 r={radius}
-                className="stroke-[#f5f5f5]"
+                stroke={tone.solid}
                 strokeWidth="10"
                 strokeDasharray={circumference}
                 initial={{ strokeDashoffset: circumference }}
@@ -94,7 +93,10 @@ export function AnalysisScoreCard({
             </svg>
 
             <div className="absolute flex flex-col items-center justify-center text-center">
-              <span className="text-[40px] font-[650] text-[#f5f5f5] tracking-tight tabular-nums leading-none">
+              <span
+                className="text-[40px] font-[650] tracking-tight tabular-nums leading-none"
+                style={{ color: tone.solid }}
+              >
                 {score}
                 <span className="text-[20px] text-[#8a8a8a] font-[450]">%</span>
               </span>
@@ -124,7 +126,10 @@ export function AnalysisScoreCard({
                   <span className="font-[600] text-[#f5f5f5]">{cat.label}</span>
                   <span className="text-[11px] font-[450] text-[#707070]">({cat.weight})</span>
                 </div>
-                <span className="font-mono text-[13px] font-[600] text-[#f5f5f5] tabular-nums">
+                <span
+                  className="font-mono text-[13px] font-[600] tabular-nums"
+                  style={{ color: scoreTone(cat.score).solid }}
+                >
                   {cat.score} / 100
                 </span>
               </div>
@@ -132,7 +137,8 @@ export function AnalysisScoreCard({
               {/* Progress Track */}
               <div className="h-1.5 w-full rounded-full bg-[#141414] overflow-hidden">
                 <motion.div
-                  className="h-full bg-[#f5f5f5] rounded-full"
+                  className="h-full rounded-full"
+                  style={{ backgroundColor: scoreTone(cat.score).solid }}
                   initial={{ width: 0 }}
                   animate={{ width: `${cat.score}%` }}
                   transition={{ duration: 0.9, delay: idx * 0.1, ease: "easeOut" }}

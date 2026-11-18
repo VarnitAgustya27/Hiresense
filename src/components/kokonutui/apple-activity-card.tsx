@@ -3,6 +3,7 @@
 import { animate, useInView, useReducedMotion } from "framer-motion";
 import { useEffect, useId, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { scoreTone } from "@/lib/score-tone";
 
 export interface ActivityData {
   label: string;
@@ -245,7 +246,10 @@ export function AppleActivityCard({
               Overall
             </span>
             <div className="flex items-baseline justify-center">
-              <span className="text-[38px] sm:text-[44px] font-[650] text-[#f5f5f5] tracking-tight tabular">
+              <span
+                className="text-[38px] sm:text-[44px] font-[650] tracking-tight tabular"
+                style={{ color: scoreTone(overallScore).solid }}
+              >
                 {overallScore}
               </span>
               <span className="text-[16px] text-[#707070] font-[450] ml-0.5">/100</span>
@@ -289,7 +293,8 @@ export function AppleActivityCard({
                   ref={(el) => {
                     if (ringRefs.current[idx]) ringRefs.current[idx].count = el;
                   }}
-                  className="text-[16px] font-[650] text-[#f5f5f5] tabular"
+                  className="text-[16px] font-[650] tabular"
+                  style={{ color: act.color }}
                 >
                   {act.current}
                 </span>
@@ -300,6 +305,22 @@ export function AppleActivityCard({
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Tiny Score Tier Legend */}
+        <div className="flex items-center gap-4 text-[11px] font-[450] text-[#707070] pt-2 border-t border-[rgba(255,255,255,0.06)] flex-wrap">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#4ade80" }} />
+            <span>Strong ≥ 75</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#facc15" }} />
+            <span>Moderate 50–74</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#f87171" }} />
+            <span>Developing &lt; 50</span>
+          </span>
         </div>
       </div>
     </div>

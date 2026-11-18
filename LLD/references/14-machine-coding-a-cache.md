@@ -14,7 +14,7 @@ We define the engineering requirements of the cache, using the CRUD model.
 
 ### Resources
 
-Cache Write Policies: [https://en.wikipedia.org/wiki/Cache_(computing)#Writing_policies](https://en.wikipedia.org/wiki/Cache_(computing)#Writing_policies)
+Cache Write Policies: [https://en.wikipedia.org/wiki/Cache_(computing)#Writing_policies](<https://en.wikipedia.org/wiki/Cache_(computing)#Writing_policies>)
 Code Link: [https://github.com/coding-parrot/Low-Level-Design/tree/master/distributed-cache](https://github.com/coding-parrot/Low-Level-Design/tree/master/distributed-cache)
 
 ### Transcript

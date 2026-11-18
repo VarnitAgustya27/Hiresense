@@ -13,12 +13,12 @@ describe("speech-sync utility", () => {
     const enTokens = tokenizeForHighlight(englishText);
 
     expect(enTokens.length).toBe(6);
-    expect(enTokens[0].text).toBe("Hello,");
-    expect(enTokens[1].text).toBe("world!");
-    expect(enTokens[2].text).toBe("This");
-    expect(enTokens[3].text).toBe("is");
-    expect(enTokens[4].text).toBe("a");
-    expect(enTokens[5].text).toBe("test.");
+    expect(enTokens[0]!.text).toBe("Hello,");
+    expect(enTokens[1]!.text).toBe("world!");
+    expect(enTokens[2]!.text).toBe("This");
+    expect(enTokens[3]!.text).toBe("is");
+    expect(enTokens[4]!.text).toBe("a");
+    expect(enTokens[5]!.text).toBe("test.");
 
     // Verify character offsets
     for (const t of enTokens) {
@@ -29,8 +29,8 @@ describe("speech-sync utility", () => {
     const hiTokens = tokenizeForHighlight(hindiText);
 
     expect(hiTokens.length).toBe(7);
-    expect(hiTokens[0].text).toBe("नमस्ते,");
-    expect(hiTokens[6].text).toBe("हूँ।");
+    expect(hiTokens[0]!.text).toBe("नमस्ते,");
+    expect(hiTokens[6]!.text).toBe("हूँ।");
     for (const t of hiTokens) {
       expect(hindiText.slice(t.start, t.end)).toBe(t.text);
     }
@@ -58,15 +58,15 @@ describe("speech-sync utility", () => {
 
     expect(schedule.length).toBe(tokens.length);
     // Last value must be duration - tail
-    expect(schedule[schedule.length - 1]).toBe(duration - tail);
+    expect(schedule[schedule.length - 1]!).toBe(duration - tail);
 
     // Strictly monotonic check
     for (let i = 1; i < schedule.length; i++) {
-      expect(schedule[i]).toBeGreaterThan(schedule[i - 1]);
+      expect(schedule[i]!).toBeGreaterThan(schedule[i - 1]!);
     }
 
     // Lead-in check: first token ends after leadIn
-    expect(schedule[0]).toBeGreaterThan(leadIn);
+    expect(schedule[0]!).toBeGreaterThan(leadIn);
   });
 
   it("handles wordIndexAtTime boundaries correctly", () => {

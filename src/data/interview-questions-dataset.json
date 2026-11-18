@@ -611,16 +611,7 @@
         "company": "Robinhood",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Data Science, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "assume",
-          "square",
-          "grid",
-          "known",
-          "size",
-          "each",
-          "spot",
-          "number"
-        ],
+        "expectedKeywords": ["assume", "square", "grid", "known", "size", "each", "spot", "number"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -651,16 +642,7 @@
         "company": "Goldman Sachs",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Data Science, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "box",
-          "has",
-          "red",
-          "cards",
-          "black",
-          "another",
-          "want",
-          "draw"
-        ],
+        "expectedKeywords": ["box", "has", "red", "cards", "black", "another", "want", "draw"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -1151,15 +1133,7 @@
         "company": "SAP",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "suppose",
-          "there",
-          "array",
-          "extract",
-          "value",
-          "indexing",
-          "num"
-        ],
+        "expectedKeywords": ["suppose", "there", "array", "extract", "value", "indexing", "num"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -1474,11 +1448,7 @@
         "company": "Capital One",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "project",
-          "initiative",
-          "proud"
-        ],
+        "expectedKeywords": ["project", "initiative", "proud"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -1489,12 +1459,7 @@
         "company": "JPMorgan Chase",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "handled",
-          "difficult",
-          "stakeholder"
-        ],
+        "expectedKeywords": ["time", "handled", "difficult", "stakeholder"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -1505,11 +1470,7 @@
         "company": "JPMorgan Chase",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "disagreed",
-          "someone"
-        ],
+        "expectedKeywords": ["time", "disagreed", "someone"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -2477,12 +2438,7 @@
         "company": "Capital One",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "machine",
-          "learning",
-          "model",
-          "productionized"
-        ],
+        "expectedKeywords": ["machine", "learning", "model", "productionized"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -2493,14 +2449,7 @@
         "company": null,
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "mention",
-          "scenario",
-          "require",
-          "use",
-          "anchor",
-          "boxes"
-        ],
+        "expectedKeywords": ["mention", "scenario", "require", "use", "anchor", "boxes"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -2677,16 +2626,7 @@
         "company": "Intel",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "made",
-          "decision",
-          "didn",
-          "work",
-          "out",
-          "did",
-          "learn"
-        ],
+        "expectedKeywords": ["time", "made", "decision", "didn", "work", "out", "did", "learn"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -2697,16 +2637,7 @@
         "company": "Salesforce",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "had",
-          "use",
-          "data",
-          "analysis",
-          "solve",
-          "problem",
-          "was"
-        ],
+        "expectedKeywords": ["time", "had", "use", "data", "analysis", "solve", "problem", "was"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -2757,16 +2688,7 @@
         "company": "Salesforce",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "had",
-          "use",
-          "data",
-          "support",
-          "hypothesis",
-          "was",
-          "not"
-        ],
+        "expectedKeywords": ["time", "had", "use", "data", "support", "hypothesis", "was", "not"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -3337,16 +3259,7 @@
         "company": "Oracle",
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "abc",
-          "inc",
-          "business",
-          "losses",
-          "last",
-          "weeks",
-          "data",
-          "due"
-        ],
+        "expectedKeywords": ["abc", "inc", "business", "losses", "last", "weeks", "data", "due"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -3477,16 +3390,7 @@
         "company": "IBM",
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "suppose",
-          "asked",
-          "run",
-          "two",
-          "week",
-          "long",
-          "test",
-          "increase"
-        ],
+        "expectedKeywords": ["suppose", "asked", "run", "two", "week", "long", "test", "increase"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -3576,16 +3480,7 @@
         "company": "Glider",
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "was",
-          "there",
-          "time",
-          "found",
-          "mistake",
-          "among",
-          "large",
-          "set"
-        ],
+        "expectedKeywords": ["was", "there", "time", "found", "mistake", "among", "large", "set"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -3676,15 +3571,7 @@
         "company": "Pico MES",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "suppose",
-          "there",
-          "array",
-          "num",
-          "extract",
-          "value",
-          "indexing"
-        ],
+        "expectedKeywords": ["suppose", "there", "array", "num", "extract", "value", "indexing"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -3773,14 +3660,7 @@
         "company": "Salesforce",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "suppose",
-          "there",
-          "array",
-          "extract",
-          "value",
-          "indexing"
-        ],
+        "expectedKeywords": ["suppose", "there", "array", "extract", "value", "indexing"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -3867,15 +3747,7 @@
         "company": "Nvidia",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "ensure",
-          "meet",
-          "deadlines",
-          "fast",
-          "paced",
-          "work",
-          "environment"
-        ],
+        "expectedKeywords": ["ensure", "meet", "deadlines", "fast", "paced", "work", "environment"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -3886,14 +3758,7 @@
         "company": "Mastercard",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "use",
-          "binomial",
-          "distribution",
-          "real",
-          "world",
-          "scenario"
-        ],
+        "expectedKeywords": ["use", "binomial", "distribution", "real", "world", "scenario"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -3904,15 +3769,7 @@
         "company": "Oracle",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "scenario",
-          "where",
-          "used",
-          "oracle",
-          "complex",
-          "data",
-          "analysis"
-        ],
+        "expectedKeywords": ["scenario", "where", "used", "oracle", "complex", "data", "analysis"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -4147,12 +4004,7 @@
         "company": "Capital One",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "most",
-          "challenging",
-          "project",
-          "worked"
-        ],
+        "expectedKeywords": ["most", "challenging", "project", "worked"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -4182,13 +4034,7 @@
         "company": "Visa",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "went",
-          "above",
-          "beyond",
-          "project"
-        ],
+        "expectedKeywords": ["time", "went", "above", "beyond", "project"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -4199,9 +4045,7 @@
         "company": "JPMorgan Chase",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "recursion"
-        ],
+        "expectedKeywords": ["recursion"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -4212,10 +4056,7 @@
         "company": "Visa",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "failed"
-        ],
+        "expectedKeywords": ["time", "failed"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -4386,16 +4227,7 @@
         "company": "Visa",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Data Engineer, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "lets",
-          "say",
-          "table",
-          "name",
-          "fields",
-          "holds",
-          "over",
-          "100"
-        ],
+        "expectedKeywords": ["lets", "say", "table", "name", "fields", "holds", "over", "100"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -5184,12 +5016,7 @@
         "company": "Gridium",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "differently",
-          "were",
-          "project",
-          "again"
-        ],
+        "expectedKeywords": ["differently", "were", "project", "again"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -5200,12 +5027,7 @@
         "company": "Goldman Sachs",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "job",
-          "scheduling",
-          "deadline",
-          "works"
-        ],
+        "expectedKeywords": ["job", "scheduling", "deadline", "works"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -5216,12 +5038,7 @@
         "company": "JPMorgan Chase",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "deploy",
-          "code",
-          "production",
-          "environment"
-        ],
+        "expectedKeywords": ["deploy", "code", "production", "environment"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -5291,14 +5108,7 @@
         "company": null,
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "scenario",
-          "where",
-          "use",
-          "etl",
-          "over",
-          "elt"
-        ],
+        "expectedKeywords": ["scenario", "where", "use", "etl", "over", "elt"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -5389,13 +5199,7 @@
         "company": "Gridium",
         "phase": "closing",
         "contextHint": "Highlight technical curiosity, engineering best practices, and continuous professional development.",
-        "expectedKeywords": [
-          "best",
-          "practices",
-          "sql",
-          "query",
-          "optimization"
-        ],
+        "expectedKeywords": ["best", "practices", "sql", "query", "optimization"],
         "idealAnswerOutline": "Shares concrete examples of recently adopted patterns or tools, assessing tradeoffs and long-term maintainability."
       },
       {
@@ -5406,13 +5210,7 @@
         "company": "Gridium",
         "phase": "closing",
         "contextHint": "Highlight technical curiosity, engineering best practices, and continuous professional development.",
-        "expectedKeywords": [
-          "best",
-          "practices",
-          "sql",
-          "query",
-          "optimization"
-        ],
+        "expectedKeywords": ["best", "practices", "sql", "query", "optimization"],
         "idealAnswerOutline": "Shares concrete examples of recently adopted patterns or tools, assessing tradeoffs and long-term maintainability."
       },
       {
@@ -5509,13 +5307,7 @@
         "company": "Shell",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "had",
-          "different",
-          "opinion",
-          "someone"
-        ],
+        "expectedKeywords": ["time", "had", "different", "opinion", "someone"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -5526,11 +5318,7 @@
         "company": "Mastercard",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "yourself",
-          "interest",
-          "mastercard"
-        ],
+        "expectedKeywords": ["yourself", "interest", "mastercard"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -5541,11 +5329,7 @@
         "company": "AWS",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "recent",
-          "college",
-          "program"
-        ],
+        "expectedKeywords": ["recent", "college", "program"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -5556,12 +5340,7 @@
         "company": "Mastercard",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "experience",
-          "past",
-          "few",
-          "months"
-        ],
+        "expectedKeywords": ["experience", "past", "few", "months"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -5572,11 +5351,7 @@
         "company": "Shell",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "yourself",
-          "leadership",
-          "skills"
-        ],
+        "expectedKeywords": ["yourself", "leadership", "skills"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -5627,16 +5402,7 @@
         "company": "PayPal",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in All, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "fair",
-          "coin",
-          "flip",
-          "until",
-          "either",
-          "heads",
-          "tails",
-          "hht"
-        ],
+        "expectedKeywords": ["fair", "coin", "flip", "until", "either", "heads", "tails", "hht"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -6047,16 +5813,7 @@
         "company": "PayPal",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in All, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "imagine",
-          "draw",
-          "two",
-          "cards",
-          "shuffled",
-          "deck",
-          "one",
-          "after"
-        ],
+        "expectedKeywords": ["imagine", "draw", "two", "cards", "shuffled", "deck", "one", "after"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -6067,13 +5824,7 @@
         "company": "PayPal",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in All, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "mean",
-          "variance",
-          "distribution",
-          "corresponding",
-          "distributions"
-        ],
+        "expectedKeywords": ["mean", "variance", "distribution", "corresponding", "distributions"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -6263,16 +6014,7 @@
         "company": "Mastercard",
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "will",
-          "load",
-          "dataset",
-          "too",
-          "large",
-          "size",
-          "hold",
-          "memory"
-        ],
+        "expectedKeywords": ["will", "load", "dataset", "too", "large", "size", "hold", "memory"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -6283,14 +6025,7 @@
         "company": "PayPal",
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "machine",
-          "learning",
-          "methods",
-          "build",
-          "chatbot",
-          "system"
-        ],
+        "expectedKeywords": ["machine", "learning", "methods", "build", "chatbot", "system"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -6301,13 +6036,7 @@
         "company": "Google",
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "prefer",
-          "working",
-          "small",
-          "large",
-          "teams"
-        ],
+        "expectedKeywords": ["prefer", "working", "small", "large", "teams"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -6358,14 +6087,7 @@
         "company": null,
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "experience",
-          "version",
-          "control",
-          "systems",
-          "like",
-          "git"
-        ],
+        "expectedKeywords": ["experience", "version", "control", "systems", "like", "git"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -6433,14 +6155,7 @@
         "company": "Mastercard",
         "phase": "scenario",
         "contextHint": "Demonstrate analytical rigor, pragmatic communication with stakeholders, and structured problem-solving.",
-        "expectedKeywords": [
-          "manage",
-          "stakeholder",
-          "expectations",
-          "high",
-          "stakes",
-          "project"
-        ],
+        "expectedKeywords": ["manage", "stakeholder", "expectations", "high", "stakes", "project"],
         "idealAnswerOutline": "Identifies core problem, evaluates options pragmatically, explains mitigation strategy, communicates clearly, and reflects on root causes."
       },
       {
@@ -6777,16 +6492,7 @@
         "company": "Pico MES",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in SQL, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "define",
-          "sql",
-          "term",
-          "terms",
-          "like",
-          "foreign",
-          "primary",
-          "key"
-        ],
+        "expectedKeywords": ["define", "sql", "term", "terms", "like", "foreign", "primary", "key"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7212,14 +6918,7 @@
         "company": null,
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "primary",
-          "sql",
-          "database",
-          "management",
-          "systems",
-          "dbms"
-        ],
+        "expectedKeywords": ["primary", "sql", "database", "management", "systems", "dbms"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -7230,12 +6929,7 @@
         "company": null,
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "concept",
-          "normalization",
-          "database",
-          "design"
-        ],
+        "expectedKeywords": ["concept", "normalization", "database", "design"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -7246,13 +6940,7 @@
         "company": null,
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "manage",
-          "large",
-          "scale",
-          "databases",
-          "performance"
-        ],
+        "expectedKeywords": ["manage", "large", "scale", "databases", "performance"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -7263,10 +6951,7 @@
         "company": null,
         "phase": "architecture",
         "contextHint": "Discuss architectural tradeoffs, scalability bottlenecks, fault tolerance, and system constraints.",
-        "expectedKeywords": [
-          "architecture",
-          "postgresql"
-        ],
+        "expectedKeywords": ["architecture", "postgresql"],
         "idealAnswerOutline": "Defines requirements, breaks down components, addresses bottlenecks (concurrency, data volume, network/disk I/O), and justifies design choices."
       },
       {
@@ -7297,13 +6982,7 @@
         "company": null,
         "phase": "closing",
         "contextHint": "Highlight technical curiosity, engineering best practices, and continuous professional development.",
-        "expectedKeywords": [
-          "best",
-          "practices",
-          "securing",
-          "sql",
-          "database"
-        ],
+        "expectedKeywords": ["best", "practices", "securing", "sql", "database"],
         "idealAnswerOutline": "Shares concrete examples of recently adopted patterns or tools, assessing tradeoffs and long-term maintainability."
       }
     ]
@@ -7380,11 +7059,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Javascript, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "purpose",
-          "keyword",
-          "javascript"
-        ],
+        "expectedKeywords": ["purpose", "keyword", "javascript"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7395,11 +7070,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Javascript, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "concept",
-          "closures",
-          "javascript"
-        ],
+        "expectedKeywords": ["concept", "closures", "javascript"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7516,14 +7187,7 @@
         "company": "Morgan Stanley",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "hardest",
-          "thing",
-          "experienced",
-          "life",
-          "did",
-          "overcome"
-        ],
+        "expectedKeywords": ["hardest", "thing", "experienced", "life", "did", "overcome"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -7534,13 +7198,7 @@
         "company": "Morgan Stanley",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "made",
-          "big",
-          "mistake",
-          "dealt"
-        ],
+        "expectedKeywords": ["time", "made", "big", "mistake", "dealt"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -7551,13 +7209,7 @@
         "company": "Morgan Stanley",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "made",
-          "big",
-          "mistake",
-          "dealt"
-        ],
+        "expectedKeywords": ["time", "made", "big", "mistake", "dealt"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -7568,13 +7220,7 @@
         "company": "Morgan Stanley",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "demonstrated",
-          "superior",
-          "leadership",
-          "skills"
-        ],
+        "expectedKeywords": ["time", "demonstrated", "superior", "leadership", "skills"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -7585,13 +7231,7 @@
         "company": "Morgan Stanley",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "used",
-          "data",
-          "make",
-          "recommendation"
-        ],
+        "expectedKeywords": ["time", "used", "data", "make", "recommendation"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -7602,11 +7242,7 @@
         "company": "Morgan Stanley",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "handled",
-          "problem",
-          "team"
-        ],
+        "expectedKeywords": ["handled", "problem", "team"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -7617,11 +7253,7 @@
         "company": "Morgan Stanley",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "were",
-          "persuasive"
-        ],
+        "expectedKeywords": ["time", "were", "persuasive"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -7632,12 +7264,7 @@
         "company": "Morgan Stanley",
         "phase": "intro",
         "contextHint": "Focus on technical context, your specific contributions, challenges overcome, and measurable impact.",
-        "expectedKeywords": [
-          "time",
-          "did",
-          "right",
-          "thing"
-        ],
+        "expectedKeywords": ["time", "did", "right", "thing"],
         "idealAnswerOutline": "Clear 2-minute overview introducing experience, explaining problem context of a major project, technical stack decisions, personal contribution, and outcome."
       },
       {
@@ -7668,14 +7295,7 @@
         "company": "Morgan Stanley",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Behavioral, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "understanding",
-          "job",
-          "will",
-          "doing",
-          "morgan",
-          "stanley"
-        ],
+        "expectedKeywords": ["understanding", "job", "will", "doing", "morgan", "stanley"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7686,14 +7306,7 @@
         "company": "Morgan Stanley",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Behavioral, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "major",
-          "financial",
-          "services",
-          "industry",
-          "didn",
-          "exist"
-        ],
+        "expectedKeywords": ["major", "financial", "services", "industry", "didn", "exist"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7704,11 +7317,7 @@
         "company": "Morgan Stanley",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Behavioral, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "friends",
-          "family",
-          "words"
-        ],
+        "expectedKeywords": ["friends", "family", "words"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7719,12 +7328,7 @@
         "company": "Morgan Stanley",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Behavioral, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "want",
-          "work",
-          "investment",
-          "banking"
-        ],
+        "expectedKeywords": ["want", "work", "investment", "banking"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7735,11 +7339,7 @@
         "company": "Morgan Stanley",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Behavioral, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "could",
-          "any",
-          "animal"
-        ],
+        "expectedKeywords": ["could", "any", "animal"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7750,13 +7350,7 @@
         "company": "Morgan Stanley",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Behavioral, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "morgan",
-          "stanley",
-          "not",
-          "goldman",
-          "sachs"
-        ],
+        "expectedKeywords": ["morgan", "stanley", "not", "goldman", "sachs"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7767,11 +7361,7 @@
         "company": "Morgan Stanley",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Behavioral, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "fun",
-          "outside",
-          "work"
-        ],
+        "expectedKeywords": ["fun", "outside", "work"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7782,11 +7372,7 @@
         "company": "Morgan Stanley",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Behavioral, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "walk",
-          "through",
-          "resume"
-        ],
+        "expectedKeywords": ["walk", "through", "resume"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7797,10 +7383,7 @@
         "company": "Morgan Stanley",
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in Behavioral, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "career",
-          "goals"
-        ],
+        "expectedKeywords": ["career", "goals"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7831,15 +7414,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "get",
-          "items",
-          "not",
-          "common",
-          "both",
-          "series",
-          "pandas"
-        ],
+        "expectedKeywords": ["get", "items", "not", "common", "both", "series", "pandas"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7850,14 +7425,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "need",
-          "add",
-          "randomness",
-          "weight",
-          "initialization",
-          "process"
-        ],
+        "expectedKeywords": ["need", "add", "randomness", "weight", "initialization", "process"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7868,14 +7436,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "will",
-          "identify",
-          "deal",
-          "missing",
-          "values",
-          "dataframe"
-        ],
+        "expectedKeywords": ["will", "identify", "deal", "missing", "values", "dataframe"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7906,12 +7467,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "difference",
-          "abstract",
-          "class",
-          "interface"
-        ],
+        "expectedKeywords": ["difference", "abstract", "class", "interface"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7922,13 +7478,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "big",
-          "notation",
-          "algorithm",
-          "time",
-          "complexity"
-        ],
+        "expectedKeywords": ["big", "notation", "algorithm", "time", "complexity"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7939,14 +7489,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "will",
-          "delete",
-          "indices",
-          "rows",
-          "columns",
-          "dataframe"
-        ],
+        "expectedKeywords": ["will", "delete", "indices", "rows", "columns", "dataframe"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7957,13 +7500,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "common",
-          "techniques",
-          "object",
-          "detection",
-          "images"
-        ],
+        "expectedKeywords": ["common", "techniques", "object", "detection", "images"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7974,13 +7511,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "term",
-          "frequency",
-          "inverse",
-          "document",
-          "idf"
-        ],
+        "expectedKeywords": ["term", "frequency", "inverse", "document", "idf"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -7991,12 +7522,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "difference",
-          "shallow",
-          "copy",
-          "deep"
-        ],
+        "expectedKeywords": ["difference", "shallow", "copy", "deep"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -8007,12 +7533,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "difference",
-          "xrange",
-          "range",
-          "functions"
-        ],
+        "expectedKeywords": ["difference", "xrange", "range", "functions"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -8023,14 +7544,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "will",
-          "efficiently",
-          "load",
-          "data",
-          "text",
-          "file"
-        ],
+        "expectedKeywords": ["will", "efficiently", "load", "data", "text", "file"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -8041,14 +7555,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "will",
-          "sort",
-          "array",
-          "based",
-          "nth",
-          "column"
-        ],
+        "expectedKeywords": ["will", "sort", "array", "based", "nth", "column"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       },
       {
@@ -8059,12 +7566,7 @@
         "company": null,
         "phase": "technical",
         "contextHint": "Demonstrate depth of knowledge in General, addressing edge cases, algorithmic efficiency, and real-world application.",
-        "expectedKeywords": [
-          "tuple",
-          "comprehension",
-          "yes",
-          "not"
-        ],
+        "expectedKeywords": ["tuple", "comprehension", "yes", "not"],
         "idealAnswerOutline": "Directly defines the concept, contrasts alternatives, provides a concrete implementation example, and notes performance considerations."
       }
     ]

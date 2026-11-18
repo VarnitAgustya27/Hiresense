@@ -3,23 +3,40 @@ import {
   generateInterviewQuestions,
   evaluateInterviewSession,
   type InterviewQuestion,
+  type InterviewScorecard,
+  type CandidateAnswerRecord,
 } from "../lib/ai-interview";
-import { getReferenceQuestionsForPrompt } from "../lib/interview-dataset";
+import { validatePlan, detectLevel, type PlanContext } from "../lib/interview-planner";
+import { computeComposite, aggregateScorecard, type RubricScores } from "../lib/scoring";
 
 // Configurable model IDs and voices from environment
-const LLM_MODEL_PRIMARY = process.env.LLM_MODEL_PRIMARY || "gemini-3.8-flash";
-const LLM_MODEL_FALLBACK = process.env.LLM_MODEL_FALLBACK || "gpt-4o-mini";
-const STT_MODEL = process.env.STT_MODEL || "gemini-3.8-flash";
-const TTS_MODEL = process.env.TTS_MODEL || "gemini-2.5-flash";
-const TTS_VOICE = process.env.TTS_VOICE || "echo";
+const LLM_MODEL_PRIMARY = process.env["LLM_MODEL_PRIMARY"] || "gemini-3.8-flash";
+const LLM_MODEL_FALLBACK = process.env["LLM_MODEL_FALLBACK"] || "gpt-4o-mini";
+const STT_MODEL = process.env["STT_MODEL"] || "gemini-3.8-flash";
+const TTS_MODEL = process.env["TTS_MODEL"] || "tts-1";
+const TTS_VOICE = process.env["TTS_VOICE"] || "onyx";
 
 // Timeouts in milliseconds
 const TIMEOUT_LLM = 25000;
-const TIMEOUT_STT = 20000;
+const TIMEOUT_STT = 25000;
 const TIMEOUT_TTS = 20000;
 
-// Retry helper with backoff on 429/5xx
+// Valid OpenAI voice IDs
+const VALID_OPENAI_VOICES = new Set(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]);
+
+function resolveOpenAiVoice(voiceCandidate?: string): string {
+  if (voiceCandidate && VALID_OPENAI_VOICES.has(voiceCandidate.toLowerCase())) {
+    return voiceCandidate.toLowerCase();
+  }
+  if (TTS_VOICE && VALID_OPENAI_VOICES.has(TTS_VOICE.toLowerCase())) {
+    return TTS_VOICE.toLowerCase();
+  }
+  return "onyx";
+}
+
+// Retry helper with backoff on 429/5xx and response logging
 async function fetchWithRetry(
+  tag: string,
   url: string,
   options: RequestInit,
   timeoutMs: number,
@@ -32,6 +49,23 @@ async function fetchWithRetry(
         ...options,
         signal: AbortSignal.timeout(timeoutMs),
       });
+
+      if (!response.ok) {
+        const bodySnippet = await response
+          .clone()
+          .text()
+          .catch(() => "");
+        console.warn(`[${tag}] status ${response.status}: ${bodySnippet.slice(0, 300)}`);
+        // If daily quota exhausted or auth failure, do not retry
+        if (
+          response.status === 401 ||
+          response.status === 403 ||
+          bodySnippet.includes("RESOURCE_EXHAUSTED") ||
+          bodySnippet.includes("quota")
+        ) {
+          return response;
+        }
+      }
 
       if (response.status === 429 || (response.status >= 500 && response.status < 600)) {
         if (attempt < maxRetries) {
@@ -48,10 +82,11 @@ async function fetchWithRetry(
         await new Promise((r) => setTimeout(r, 600 * attempt));
         continue;
       }
+      console.warn(`[${tag}] network exception:`, err);
       throw err;
     }
   }
-  throw new Error("Request failed after retries");
+  throw new Error(`[${tag}] Request failed after retries`);
 }
 
 /* ========================================================================== */
@@ -61,25 +96,78 @@ async function fetchWithRetry(
 export const PlanRequestSchema = z.object({
   jobTitle: z.string().min(1),
   jobPosting: z.record(z.unknown()).optional().default({}),
+  jobId: z.string().optional(),
+  company: z.string().optional(),
   resumeSummary: z.string().optional().default(""),
   projects: z.array(z.string()).optional().default([]),
   verificationQuestions: z.array(z.string()).optional().default([]),
   language: z.enum(["en", "hi", "hinglish"]).optional().default("en"),
+  analysis: z
+    .object({
+      executive_summary: z.string().optional(),
+      strengths: z
+        .array(
+          z.object({
+            skill_or_area: z.string(),
+            evidence_quote: z.string(),
+          }),
+        )
+        .optional(),
+      gaps: z
+        .array(
+          z.object({
+            requirement: z.string(),
+            type: z.enum(["mandatory", "preferred"]).optional(),
+            severity: z.string().optional(),
+          }),
+        )
+        .optional(),
+      verification_questions: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 
 export type PlanRequest = z.infer<typeof PlanRequestSchema>;
 
 const planCache = new Map<
   string,
-  { timestamp: number; plan: { questions: InterviewQuestion[]; modelUsed: string } }
+  {
+    timestamp: number;
+    plan: {
+      questions: InterviewQuestion[];
+      modelUsed: string;
+      source: "llm" | "template";
+    };
+  }
 >();
 const planInFlight = new Map<
   string,
-  Promise<{ questions: InterviewQuestion[]; modelUsed: string }>
+  Promise<{
+    questions: InterviewQuestion[];
+    modelUsed: string;
+    source: "llm" | "template";
+  }>
 >();
 
+const LlmQuestionSchema = z.object({
+  id: z.enum(["q1_intro", "q2_technical", "q3_architecture", "q4_scenario", "q5_closing"]),
+  phase: z.enum(["intro", "technical", "architecture", "scenario", "closing"]),
+  phaseLabel: z.string(),
+  question: z.string(),
+  contextHint: z.string(),
+  expectedKeywords: z.array(z.string()),
+  idealAnswerOutline: z.string(),
+  groundedIn: z.string().optional(),
+});
+
+const LlmPlanSchema = z.object({
+  questions: z.array(LlmQuestionSchema).length(5),
+});
+
 export async function handleInterviewPlan(payload: PlanRequest) {
-  const cacheKey = `${payload.jobTitle}_${payload.language}_${(payload.verificationQuestions || []).join(",")}`;
+  const analysisFingerprint = payload.analysis?.strengths?.[0]?.evidence_quote?.slice(0, 20) || "";
+  const cacheKey = `${payload.jobId || ""}_${payload.jobTitle}_${payload.language}_${analysisFingerprint}_${(payload.verificationQuestions || []).join(",")}`;
+
   const cached = planCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 120_000) {
     console.log(`[interview/plan] Serving cached plan for ${payload.jobTitle}`);
@@ -92,94 +180,149 @@ export async function handleInterviewPlan(payload: PlanRequest) {
 
   const execPromise = (async () => {
     const t0 = Date.now();
-    const geminiKey = process.env.GEMINI_API_KEY?.trim();
-    const openAiKey = process.env.OPENAI_API_KEY?.trim();
+    const geminiKey = process.env["GEMINI_API_KEY"]?.trim();
+    const openAiKey = process.env["OPENAI_API_KEY"]?.trim();
 
-    // State machine: INTRO -> RESUME -> TECHNICAL -> PROJECT -> SITUATIONAL -> CLOSING
+    const companyName =
+      payload.company ||
+      (payload.jobPosting["company"] as string) ||
+      (payload.jobPosting["company_name"] as string) ||
+      "Company";
+    const level = detectLevel((payload.jobPosting["experience"] as string) || "", payload.jobTitle);
+
     const systemPrompt = `You are Mira, HireSense's lead AI technical interviewer.
-Generate exactly 5 role-specific, spoken-length interview questions for the position of "${payload.jobTitle}".
-State machine order:
-1. INTRO (Warm opening and candidate introduction)
-2. RESUME (Resume & project background verification)
-3. TECHNICAL (Deep dive into mandatory tech stack skills)
-4. PROJECT (System architecture and technical decision making)
-5. SITUATIONAL (Engineering judgment, trade-offs, and communication)
+Generate exactly 5 role-specific, spoken-length interview questions for the position of "${payload.jobTitle}" at "${companyName}".
+Role seniority level detected: ${level.toUpperCase()}.
 
-STRICT RULES:
-- Language: Output in ${payload.language === "hi" ? "Hindi (Devanagari script)" : payload.language === "hinglish" ? "Hinglish (conversational code-mixed Indian English and Roman Hindi)" : "English"}.
-- Spoken-length: Under 35 words per question. Conversational and natural.
-- Concrete and non-leading: Test practical depth without giving away answers.
+State machine slot allocation:
+1. q1_intro (phase: intro, phaseLabel: "Candidate Introduction & Role Interest"): Warm opening, state candidate role and company, ask for intro and motivation.
+2. q2_technical (phase: technical, phaseLabel: "Core Domain & Technical Depth"): Test the primary mandatory skill. ${
+      level === "entry"
+        ? "Ask core concept fundamentals and a common pitfall."
+        : "Ask applied engineering trade-offs and architectural decisions."
+    }
+3. q3_architecture (phase: architecture, phaseLabel: "Project & Design Depth"): ${
+      payload.analysis?.strengths?.[0]?.evidence_quote
+        ? `Grounded in resume evidence quote: "${payload.analysis.strengths[0].evidence_quote}". Ask for specific individual contribution and retrospective improvements.`
+        : "Probe a secondary mandatory or architectural skill in a real production system context."
+    }
+4. q4_scenario (phase: scenario, phaseLabel: "Situational Judgment & Problem Solving"): A real-world failure triage scenario derived from job responsibilities.
+5. q5_closing (phase: closing, phaseLabel: "Engineering Growth & Wrap-up"): ${
+      payload.analysis?.gaps?.[0]?.requirement
+        ? `Grounded in candidate gap "${payload.analysis.gaps[0].requirement}". Probe how they would rapidly become productive with it.`
+        : "Continuous engineering learning, evaluating new tools, and long-term maintainability."
+    }
+
+STRICT LANGUAGE RULES:
+- Language: Output in ${
+      payload.language === "hi"
+        ? "Hindi (Devanagari script with English technical terms in Latin script like 'React', 'PostgreSQL', 'latency')"
+        : payload.language === "hinglish"
+          ? "Hinglish (conversational code-mixed Indian English and Roman Hindi, e.g., 'Aapne React ko use karte waqt...')"
+          : "English"
+    }.
+- Spoken-length: Under 35 words per question. Conversational, natural, and clear.
+- No write-code-on-screen requests. Must be answerable verbally in under 2 minutes.
 - Prohibited topics: Never ask about age, religion, family, caste, nationality, gender, or health.
+- NEVER mention any other company name (such as Square, Mastercard, PayPal, Amazon, Google, etc.). Only mention "${companyName}".
+- Every question must return "groundedIn", "contextHint", "expectedKeywords", and "idealAnswerOutline" (concrete points).
 
-Output JSON format matching this schema:
+Return JSON strictly matching schema:
 {
   "questions": [
     {
-      "id": "q1_intro",
-      "phase": "intro",
-      "phaseLabel": "Background and project verification",
-      "question": string,
+      "id": "q1_intro" | "q2_technical" | "q3_architecture" | "q4_scenario" | "q5_closing",
+      "phase": "intro" | "technical" | "architecture" | "scenario" | "closing",
+      "phaseLabel": string,
+      "question": string (<= 35 spoken words),
       "contextHint": string,
-      "expectedKeywords": [string],
-      "idealAnswerOutline": string
+      "expectedKeywords": string[],
+      "idealAnswerOutline": string (3-4 bullet points),
+      "groundedIn": string
     }
   ]
 }`;
 
-    // Retrieve grounded benchmark questions from Hugging Face dataset
-    const companyName = (payload.jobPosting?.company ||
-      payload.jobPosting?.company_name ||
-      "") as string;
-    const benchmarkQuestions = getReferenceQuestionsForPrompt(payload.jobTitle, companyName, 5);
+    const userPromptContent = `Job Title: ${payload.jobTitle}
+Company: ${companyName}
+Level: ${level}
+Job Requirements: ${JSON.stringify(payload.jobPosting)}
+Candidate Resume Summary: ${payload.resumeSummary || "Standard candidate profile"}
+Candidate Resume Analysis: ${JSON.stringify(payload.analysis || {})}`;
 
-    const userPromptContent = `Job Title: ${payload.jobTitle}\nJob Requirements: ${JSON.stringify(payload.jobPosting)}\nCandidate Summary: ${payload.resumeSummary || "Standard candidate profile"}${
-      benchmarkQuestions.length > 0
-        ? `\n\nReference Benchmark Questions for this role from the Hugging Face Interview Dataset:\n${benchmarkQuestions.map((q, idx) => `${idx + 1}. ${q}`).join("\n")}`
-        : ""
-    }`;
+    // Helper to validate and verify
+    const tryValidate = (parsedJson: unknown) => {
+      const parsed = LlmPlanSchema.safeParse(parsedJson);
+      if (!parsed.success) {
+        return {
+          valid: false,
+          errors: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`),
+        };
+      }
+      return validatePlan(
+        parsed.data.questions as InterviewQuestion[],
+        payload.jobTitle,
+        payload.jobPosting,
+        {
+          language: payload.language,
+          company: companyName,
+          analysis: payload.analysis,
+        },
+      );
+    };
 
     // 1. Try Gemini primary
     if (geminiKey) {
       try {
-        const resp = await fetchWithRetry(
-          `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL_PRIMARY}:generateContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    { text: systemPrompt },
-                    {
-                      text: userPromptContent,
-                    },
-                  ],
+        let attemptPrompt = userPromptContent;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const resp = await fetchWithRetry(
+            "interview/plan.gemini",
+            `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL_PRIMARY}:generateContent?key=${geminiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    parts: [{ text: systemPrompt }, { text: attemptPrompt }],
+                  },
+                ],
+                generationConfig: {
+                  responseMimeType: "application/json",
+                  temperature: attempt === 0 ? 0.2 : 0.0,
                 },
-              ],
-              generationConfig: {
-                responseMimeType: "application/json",
-                temperature: 0.2,
-              },
-            }),
-          },
-          TIMEOUT_LLM,
-        );
+              }),
+            },
+            TIMEOUT_LLM,
+          );
 
-        if (resp.ok) {
-          const data = await resp.json();
-          const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (rawText) {
-            const parsed = JSON.parse(rawText);
-            if (Array.isArray(parsed.questions) && parsed.questions.length >= 5) {
-              console.log(`[interview/plan] Generated via Gemini in ${Date.now() - t0}ms`);
-              const plan = {
-                questions: parsed.questions.slice(0, 5) as InterviewQuestion[],
-                modelUsed: LLM_MODEL_PRIMARY,
-              };
-              planCache.set(cacheKey, { timestamp: Date.now(), plan });
-              return plan;
+          if (resp.ok) {
+            const data = await resp.json();
+            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (rawText) {
+              try {
+                const parsed = JSON.parse(rawText);
+                const valResult = tryValidate(parsed);
+                if (valResult.valid) {
+                  console.log(`[interview/plan] Generated via Gemini in ${Date.now() - t0}ms`);
+                  const plan = {
+                    questions: (parsed.questions as InterviewQuestion[]).slice(0, 5),
+                    modelUsed: LLM_MODEL_PRIMARY,
+                    source: "llm" as const,
+                  };
+                  planCache.set(cacheKey, { timestamp: Date.now(), plan });
+                  return plan;
+                } else if (attempt === 0) {
+                  attemptPrompt += `\n\nPREVIOUS ATTEMPT ERRORS (FIX THEM STRICTLY):\n${valResult.errors.join("\n")}`;
+                }
+              } catch (parseErr) {
+                console.warn("[interview/plan] JSON parse error from Gemini:", parseErr);
+              }
             }
+          } else {
+            // On non-OK HTTP status (e.g. 429 quota exhaustion), break immediately to fallback provider
+            break;
           }
         }
       } catch (geminiErr) {
@@ -190,44 +333,56 @@ Output JSON format matching this schema:
     // 2. Try OpenAI fallback
     if (openAiKey) {
       try {
-        const resp = await fetchWithRetry(
-          "https://api.openai.com/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${openAiKey}`,
+        let attemptPrompt = userPromptContent;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const resp = await fetchWithRetry(
+            "interview/plan.openai",
+            "https://api.openai.com/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${openAiKey}`,
+              },
+              body: JSON.stringify({
+                model: LLM_MODEL_FALLBACK,
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: attemptPrompt },
+                ],
+                response_format: { type: "json_object" },
+                temperature: attempt === 0 ? 0.2 : 0.0,
+              }),
             },
-            body: JSON.stringify({
-              model: LLM_MODEL_FALLBACK,
-              messages: [
-                { role: "system", content: systemPrompt },
-                {
-                  role: "user",
-                  content: userPromptContent,
-                },
-              ],
-              response_format: { type: "json_object" },
-              temperature: 0.2,
-            }),
-          },
-          TIMEOUT_LLM,
-        );
+            TIMEOUT_LLM,
+          );
 
-        if (resp.ok) {
-          const data = await resp.json();
-          const content = data.choices?.[0]?.message?.content;
-          if (content) {
-            const parsed = JSON.parse(content);
-            if (Array.isArray(parsed.questions) && parsed.questions.length >= 5) {
-              console.log(`[interview/plan] Generated via OpenAI in ${Date.now() - t0}ms`);
-              const plan = {
-                questions: parsed.questions.slice(0, 5) as InterviewQuestion[],
-                modelUsed: LLM_MODEL_FALLBACK,
-              };
-              planCache.set(cacheKey, { timestamp: Date.now(), plan });
-              return plan;
+          if (resp.ok) {
+            const data = await resp.json();
+            const content = data.choices?.[0]?.message?.content;
+            if (content) {
+              try {
+                const parsed = JSON.parse(content);
+                const valResult = tryValidate(parsed);
+                if (valResult.valid) {
+                  console.log(`[interview/plan] Generated via OpenAI in ${Date.now() - t0}ms`);
+                  const plan = {
+                    questions: (parsed.questions as InterviewQuestion[]).slice(0, 5),
+                    modelUsed: LLM_MODEL_FALLBACK,
+                    source: "llm" as const,
+                  };
+                  planCache.set(cacheKey, { timestamp: Date.now(), plan });
+                  return plan;
+                } else if (attempt === 0) {
+                  attemptPrompt += `\n\nPREVIOUS ATTEMPT ERRORS (FIX THEM STRICTLY):\n${valResult.errors.join("\n")}`;
+                }
+              } catch (parseErr) {
+                console.warn("[interview/plan] JSON parse error from OpenAI:", parseErr);
+              }
             }
+          } else {
+            // On non-OK HTTP status (e.g. 429 quota exhaustion), break immediately to fallback provider
+            break;
           }
         }
       } catch (openAiErr) {
@@ -237,14 +392,15 @@ Output JSON format matching this schema:
 
     // 3. Fallback to deterministic plan
     console.log(`[interview/plan] Using deterministic planner in ${Date.now() - t0}ms`);
-    const deterministic = generateInterviewQuestions(
-      payload.jobTitle,
-      payload.jobPosting,
-      payload.verificationQuestions,
-    );
+    const deterministic = generateInterviewQuestions(payload.jobTitle, payload.jobPosting, {
+      language: payload.language,
+      company: companyName,
+      analysis: payload.analysis,
+    });
     const plan = {
       questions: deterministic,
       modelUsed: "HireSense Dynamic Planner",
+      source: "template" as const,
     };
     planCache.set(cacheKey, { timestamp: Date.now(), plan });
     return plan;
@@ -274,21 +430,16 @@ export const TurnRequestSchema = z.object({
 export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 
 export async function handleInterviewTurn(payload: TurnRequest) {
-  const t0 = Date.now();
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const openAiKey = process.env.OPENAI_API_KEY?.trim();
   const answer = payload.candidateAnswer.trim();
 
-  // App-enforced boundary: max 1 follow-up per question
   if (payload.hasFollowedUp) {
     return {
       shouldFollowUp: false,
       followUpQuestion: null,
-      feedback: "Answer received. Advancing to the next question.",
+      feedback: "Answer received. Advancing to next question.",
     };
   }
 
-  // If answer is empty or minimal, trigger a polite clarification
   if (answer.length === 0) {
     return {
       shouldFollowUp: false,
@@ -297,56 +448,6 @@ export async function handleInterviewTurn(payload: TurnRequest) {
     };
   }
 
-  const systemPrompt = `You are Mira, an AI technical interviewer.
-The candidate just answered: "${answer}"
-For the question: "${payload.currentQuestion}"
-Determine if a targeted follow-up question is warranted:
-- Trigger follow-up ONLY if the answer is vague, under 15 words, or makes a major technical claim without explaining how it was built.
-- Do NOT trigger follow-up if the answer is already clear or sufficient.
-- Language: Output in ${payload.language === "hi" ? "Hindi (Devanagari)" : payload.language === "hinglish" ? "Hinglish (Latin script)" : "English"}.
-- Spoken-length: Under 25 words.
-
-Output JSON format:
-{
-  "shouldFollowUp": boolean,
-  "followUpQuestion": string | null,
-  "rationale": string
-}`;
-
-  if (geminiKey) {
-    try {
-      const resp = await fetchWithRetry(
-        `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL_PRIMARY}:generateContent?key=${geminiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: systemPrompt }] }],
-            generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
-          }),
-        },
-        TIMEOUT_LLM,
-      );
-
-      if (resp.ok) {
-        const data = await resp.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          const parsed = JSON.parse(text);
-          console.log(`[interview/turn] Evaluated turn in ${Date.now() - t0}ms`);
-          return {
-            shouldFollowUp: Boolean(parsed.shouldFollowUp),
-            followUpQuestion: parsed.followUpQuestion || null,
-            feedback: parsed.rationale || "Answer analyzed.",
-          };
-        }
-      }
-    } catch (e) {
-      console.warn("[interview/turn] Gemini fallback:", e);
-    }
-  }
-
-  // Fallback heuristic: follow up once if answer is very short (< 15 words)
   const wordCount = answer.split(/\s+/).length;
   const needFollowUp = wordCount < 15;
   return {
@@ -365,14 +466,19 @@ Output JSON format:
 export const EvaluateRequestSchema = z.object({
   candidateName: z.string().min(1),
   targetJobTitle: z.string().min(1),
+  jobPosting: z.record(z.unknown()).optional().default({}),
   questions: z.array(
     z.object({
       id: z.string(),
-      phase: z.string().optional().default("technical"),
+      phase: z
+        .enum(["intro", "technical", "architecture", "scenario", "closing"])
+        .optional()
+        .default("technical"),
       phaseLabel: z.string(),
       question: z.string(),
       expectedKeywords: z.array(z.string()).optional().default([]),
       idealAnswerOutline: z.string().optional().default(""),
+      groundedIn: z.string().optional(),
     }),
   ),
   answers: z.record(z.string()),
@@ -382,15 +488,40 @@ export const EvaluateRequestSchema = z.object({
 
 export type EvaluateRequest = z.infer<typeof EvaluateRequestSchema>;
 
+const RubricItemSchema = z.object({
+  questionId: z.string(),
+  rubric: z.object({
+    technicalCorrectness: z.number().min(0).max(100).nullable(),
+    problemSolving: z.number().min(0).max(100).nullable(),
+    projectUnderstanding: z.number().min(0).max(100).nullable(),
+    relevanceCompleteness: z.number().min(0).max(100).nullable(),
+    communicationClarity: z.number().min(0).max(100).nullable(),
+    behavioralEvidence: z.number().min(0).max(100).nullable(),
+  }),
+  evidenceQuotes: z.array(z.string()).optional().default([]),
+  strengths: z.array(z.string()).optional().default([]),
+  gaps: z.array(z.string()).optional().default([]),
+  englishTranslation: z.string().optional(),
+  confidence: z.number().min(0).max(100).nullable().optional(),
+});
+
+const LlmEvaluateResponseSchema = z.object({
+  answers: z.array(RubricItemSchema),
+  keyTakeaways: z.array(z.string()).optional().default([]),
+  gaps: z.array(z.string()).optional().default([]),
+  questionsToVerify: z.array(z.string()).optional().default([]),
+});
+
 export async function handleInterviewEvaluate(payload: EvaluateRequest) {
   const t0 = Date.now();
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const openAiKey = process.env.OPENAI_API_KEY?.trim();
+  const geminiKey = process.env["GEMINI_API_KEY"]?.trim();
+  const openAiKey = process.env["OPENAI_API_KEY"]?.trim();
 
   // Check if all questions were unanswered
   const totalAnswers = Object.values(payload.answers).filter(
-    (a) => a && a.trim().length > 0,
+    (a) => a && a.trim().length > 0 && a !== "[Unanswered]",
   ).length;
+
   if (totalAnswers === 0) {
     const emptyScorecard = evaluateInterviewSession(
       payload.candidateName,
@@ -398,58 +529,57 @@ export async function handleInterviewEvaluate(payload: EvaluateRequest) {
       payload.questions as InterviewQuestion[],
       payload.answers,
       payload.durations,
+      payload.language,
     );
-    emptyScorecard.overallScore = 0;
     return emptyScorecard;
   }
 
+  const level = detectLevel(
+    (payload.jobPosting["experience"] as string) || "",
+    payload.targetJobTitle,
+  );
+
   const systemPrompt = `You are HireSense's objective interview evaluation rubric engine.
-Score the candidate's actual interview transcript strictly against these weights:
-- Technical correctness: 35%
-- Problem solving & reasoning: 20%
-- Project understanding: 15%
-- Answer relevance & completeness: 10%
-- Communication clarity: 10%
-- Role-specific behavioral evidence: 10%
+Score the candidate's actual interview transcript strictly against the 6 rubric dimensions:
+1. technicalCorrectness (weight 35%)
+2. problemSolving (weight 20%)
+3. projectUnderstanding (weight 15%)
+4. relevanceCompleteness (weight 10%)
+5. communicationClarity (weight 10%)
+6. behavioralEvidence (weight 10%)
 
-CRITICAL SCORING RUBRIC (STRICT ENFORCEMENT):
-1. NOISE & GREETINGS: If a candidate answer is a greeting (e.g., "hello", "hi"), single-character/letters (e.g. "s", "wfdf", "asdf"), non-answer ("idk", "ok", "yes"), or empty/skipped:
-   - YOU MUST SCORE 0 FOR technicalScore AND 0 FOR relevanceScore!
-   - clarityScore may be at most 15 for a clear polite greeting, or 0 for noise.
-   - DO NOT award courtesy or default points (e.g., 25% or 65%) for meaningless input!
-2. SUBSTANTIVE ANSWERS:
-   - 0-20: Non-responsive, noise, or completely inaccurate.
-   - 21-45: Superficial mention of tech stack names without explaining architecture, trade-offs, or mechanisms.
-   - 46-69: Foundational operational knowledge; covers basics but lacks production edge-case depth or telemetry metrics.
-   - 70-85: Strong technical competency; clearly articulates architecture, optimization, and practical trade-offs.
-   - 86-100: Exceptional domain mastery; comprehensive system design, edge case mitigation, and production metrics.
-3. Every non-zero score must link to candidate evidence quotes.
-4. Key takeaways and gaps MUST honestly reflect actual performance:
-   - If candidate provided minimal answers or scored low (<40), state candidly that insufficient technical evidence was captured. DO NOT invent false praise like "demonstrated consistent communication" if the candidate typed noise.
-5. NEVER make personality, honesty, or psychological judgments.
+CRITICAL CALIBRATION & HONESTY RULES:
+- ROLE LEVEL CALIBRATION: The candidate is evaluated for a ${level.toUpperCase()} level role.
+  A fully correct, well-derived answer to a ${level}-level question scores 85-95 on technical correctness, not 35!
+- SPEECH-TO-TEXT TOLERANCE: Be tolerant of speech recognition artifacts, minor word repetitions, and typos.
+- ACCENT & MULTILINGUAL FAIRNESS: Do NOT penalize accent, grammar, code-mixing, or non-English answers.
+  "communicationClarity" measures structure, coherence, and completeness only.
+- HINDI & HINGLISH ANSWERS: Score the content of Hindi and Hinglish answers directly in the language provided.
+  Always return "englishTranslation" for recruiter review when the candidate answered in Hindi or Hinglish.
+- TRIVIAL & EMPTY ANSWERS: Trivial input (greetings like "hello", "namaste", "idk", single characters, or empty) MUST score 0 across all dimensions (at most 15 on communicationClarity for a polite greeting).
+- OBJECTIVE PROCTORING: NEVER infer personality, honesty, confidence, or psychological traits.
+- EVIDENCE GROUNDING: Every "evidenceQuotes" item MUST be an exact, case-insensitive substring of the candidate's answer, each <= 25 words.
 
-Return JSON strictly matching:
+CRITICAL SCHEMA INSTRUCTION:
+Do NOT output "overallScore", "categories", or "fitVerdict". Those are calculated deterministically in server code!
+Return JSON strictly matching this format:
 {
-  "overallScore": number (0 to 100),
-  "fitVerdict": "Strong Fit" | "Moderate Fit" | "Developing Fit",
-  "categories": {
-    "technicalAccuracy": number (0 to 100),
-    "communicationClarity": number (0 to 100),
-    "problemSolving": number (0 to 100),
-    "practicalEvidence": number (0 to 100)
-  },
   "answers": [
     {
-      "questionId": string,
-      "metrics": {
-        "technicalScore": number (0 to 100),
-        "clarityScore": number (0 to 100),
-        "relevanceScore": number (0 to 100)
+      "questionId": "MUST be one of the listed question IDs verbatim (e.g., q1_intro, q2_technical...)",
+      "rubric": {
+        "technicalCorrectness": integer 0-100 or null if not applicable to this question,
+        "problemSolving": integer 0-100 or null,
+        "projectUnderstanding": integer 0-100 or null,
+        "relevanceCompleteness": integer 0-100 or null,
+        "communicationClarity": integer 0-100 or null,
+        "behavioralEvidence": integer 0-100 or null
       },
       "evidenceQuotes": [string],
-      "gaps": [string],
       "strengths": [string],
-      "confidence": number (0 to 100)
+      "gaps": [string],
+      "englishTranslation": string,
+      "confidence": integer 0-100
     }
   ],
   "keyTakeaways": [string],
@@ -457,40 +587,230 @@ Return JSON strictly matching:
   "questionsToVerify": [string]
 }`;
 
-  const promptContent = `Candidate: ${payload.candidateName}
-Role: ${payload.targetJobTitle}
-Questions and Candidate Transcripts:
+  const promptContent = `Candidate Name: ${payload.candidateName}
+Target Role: ${payload.targetJobTitle}
+Role Seniority Level: ${level}
+Session Language Mode: ${payload.language}
+
+QUESTIONS AND CANDIDATE TRANSCRIPTS:
 ${payload.questions
   .map(
-    (q, i) => `Q${i + 1} (${q.phaseLabel}): "${q.question}"
+    (q) => `[${q.id}] (${q.phaseLabel})
+Question: "${q.question}"
 Candidate Answer: "${payload.answers[q.id] || "[Unanswered]"}"
 Duration: ${payload.durations[q.id] || 0}s`,
   )
   .join("\n\n")}`;
 
+  // Helper to process, validate, and compute final scorecard
+  const processLlmResponse = (
+    parsed: z.infer<typeof LlmEvaluateResponseSchema>,
+    modelUsed: string,
+  ): InterviewScorecard => {
+    const rawAnswersList = parsed.answers || [];
+
+    const processedAnswers: CandidateAnswerRecord[] = payload.questions.map((q, idx) => {
+      let matched = rawAnswersList.find((a) => a.questionId === q.id);
+      if (!matched && rawAnswersList.length === payload.questions.length && rawAnswersList[idx]) {
+        console.warn(
+          `[interview/evaluate] questionId "${q.id}" not matched; falling back to array index ${idx}`,
+        );
+        matched = rawAnswersList[idx];
+      }
+
+      const rawAnswer = (payload.answers[q.id] || "").trim();
+      const isUnanswered = !rawAnswer || rawAnswer === "[Unanswered]";
+      const isTrivial =
+        rawAnswer.length < 3 || /^(hello|hi|hey|s|asdf|wfdf|pass|idk|namaste)$/i.test(rawAnswer);
+
+      if (!matched) {
+        // Fall back to deterministic single-answer score for this missing question
+        const fallbackSingle = evaluateInterviewSession(
+          payload.candidateName,
+          payload.targetJobTitle,
+          [q as InterviewQuestion],
+          { [q.id]: rawAnswer },
+          { [q.id]: payload.durations[q.id] || 0 },
+          payload.language,
+        ).answers[0];
+
+        return (
+          fallbackSingle || {
+            questionId: q.id,
+            question: q.question,
+            phaseLabel: q.phaseLabel,
+            transcribedAnswer: rawAnswer || "[Unanswered / Skipped]",
+            durationSeconds: payload.durations[q.id] || 0,
+            rubric: {
+              technicalCorrectness: 0,
+              problemSolving: 0,
+              projectUnderstanding: 0,
+              relevanceCompleteness: 0,
+              communicationClarity: 0,
+              behavioralEvidence: 0,
+            },
+            compositeScore: 0,
+            evidenceQuotes: [],
+            confidence: null,
+            answerLanguage: payload.language,
+            metrics: { technicalScore: 0, clarityScore: 0, relevanceScore: 0 },
+            strengths: ["No answer recorded."],
+            improvements: ["Provide substantive technical detail."],
+            modelAnswer: q.idealAnswerOutline || "",
+          }
+        );
+      }
+
+      let rubric: RubricScores;
+      if (isUnanswered || isTrivial) {
+        rubric = {
+          technicalCorrectness: 0,
+          problemSolving: 0,
+          projectUnderstanding: 0,
+          relevanceCompleteness: 0,
+          communicationClarity: isTrivial ? 15 : 0,
+          behavioralEvidence: 0,
+        };
+      } else {
+        rubric = {
+          technicalCorrectness: matched.rubric.technicalCorrectness,
+          problemSolving: matched.rubric.problemSolving,
+          projectUnderstanding: matched.rubric.projectUnderstanding,
+          relevanceCompleteness: matched.rubric.relevanceCompleteness,
+          communicationClarity: matched.rubric.communicationClarity,
+          behavioralEvidence: matched.rubric.behavioralEvidence,
+        };
+      }
+
+      const compositeScore = computeComposite(rubric);
+
+      // Verify evidence quotes are verbatim case-insensitive substrings of the actual answer
+      const survivingQuotes: string[] = [];
+      const lowerAnswer = rawAnswer.toLowerCase();
+      for (const quote of matched.evidenceQuotes || []) {
+        if (quote && quote.trim().length > 3 && lowerAnswer.includes(quote.trim().toLowerCase())) {
+          survivingQuotes.push(quote.trim());
+        }
+      }
+
+      let answerConfidence = matched.confidence ?? 85;
+      if (compositeScore > 0 && survivingQuotes.length === 0 && !isTrivial) {
+        answerConfidence = Math.min(answerConfidence, 40);
+      }
+
+      return {
+        questionId: q.id,
+        question: q.question,
+        phaseLabel: q.phaseLabel,
+        transcribedAnswer: rawAnswer || "[Unanswered / Skipped]",
+        durationSeconds: payload.durations[q.id] || 0,
+        rubric,
+        compositeScore,
+        evidenceQuotes: survivingQuotes,
+        confidence: isUnanswered ? null : answerConfidence,
+        englishTranslation: matched.englishTranslation || undefined,
+        answerLanguage: payload.language,
+        metrics: {
+          technicalScore: rubric.technicalCorrectness ?? 0,
+          clarityScore: rubric.communicationClarity ?? 0,
+          relevanceScore: rubric.relevanceCompleteness ?? 0,
+        },
+        strengths: isTrivial
+          ? ["Polite engagement or greeting captured."]
+          : matched.strengths.length > 0
+            ? matched.strengths
+            : ["Engagement with question prompt recorded."],
+        improvements: isTrivial
+          ? [
+              "Response was non-substantive. Provide concrete technical architecture and trade-off details.",
+            ]
+          : matched.gaps.length > 0
+            ? matched.gaps
+            : ["Elaborate on production failure modes and trade-offs."],
+        modelAnswer: q.idealAnswerOutline || "",
+      };
+    });
+
+    const { overallScore, categories, fitVerdict } = aggregateScorecard(processedAnswers);
+
+    const totalDuration = Object.values(payload.durations).reduce((a, b) => a + b, 0);
+    const mins = Math.floor(totalDuration / 60);
+    const secs = totalDuration % 60;
+
+    return {
+      candidateName: payload.candidateName,
+      targetJobTitle: payload.targetJobTitle,
+      overallScore,
+      fitVerdict,
+      completedAt: new Date().toISOString(),
+      durationFormatted: `${mins > 0 ? `${mins}m ` : ""}${secs}s`,
+      evaluationSource: "llm",
+      modelUsed,
+      lowConfidence: false,
+      language: payload.language,
+      categories,
+      answers: processedAnswers,
+      keyTakeaways:
+        parsed.keyTakeaways.length > 0
+          ? parsed.keyTakeaways
+          : ["Comprehensive interview completed."],
+      gaps:
+        parsed.gaps.length > 0
+          ? parsed.gaps
+          : ["Verify deeper edge-case handling in live technical round."],
+      recruiterVerificationNotes:
+        parsed.questionsToVerify.length > 0
+          ? parsed.questionsToVerify
+          : ["Conduct live code walkthrough on core system boundaries."],
+    };
+  };
+
   // 1. Try Gemini Primary
   if (geminiKey) {
     try {
-      const resp = await fetchWithRetry(
-        `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL_PRIMARY}:generateContent?key=${geminiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: systemPrompt }, { text: promptContent }] }],
-            generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
-          }),
-        },
-        TIMEOUT_LLM,
-      );
+      let promptToUse = promptContent;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const resp = await fetchWithRetry(
+          "interview/evaluate.gemini",
+          `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL_PRIMARY}:generateContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [{ text: systemPrompt }, { text: promptToUse }],
+                },
+              ],
+              generationConfig: {
+                responseMimeType: "application/json",
+                temperature: attempt === 0 ? 0.1 : 0.0,
+              },
+            }),
+          },
+          TIMEOUT_LLM,
+        );
 
-      if (resp.ok) {
-        const data = await resp.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          const parsed = JSON.parse(text);
-          console.log(`[interview/evaluate] Evaluated via Gemini in ${Date.now() - t0}ms`);
-          return formatEvaluatedScorecard(parsed, payload);
+        if (resp.ok) {
+          const data = await resp.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            try {
+              const rawJson = JSON.parse(text);
+              const validated = LlmEvaluateResponseSchema.safeParse(rawJson);
+              if (validated.success) {
+                console.log(`[interview/evaluate] Evaluated via Gemini in ${Date.now() - t0}ms`);
+                return processLlmResponse(validated.data, LLM_MODEL_PRIMARY);
+              } else if (attempt === 0) {
+                promptToUse += `\n\nSCHEMA VALIDATION ERRORS FROM PREVIOUS ATTEMPT (FIX STRICTLY):\n${validated.error.issues.map((i) => i.message).join("\n")}`;
+              }
+            } catch (parseErr) {
+              console.warn("[interview/evaluate] Gemini JSON parse error:", parseErr);
+            }
+          }
+        } else {
+          // On non-OK HTTP status (e.g. 429 quota exhaustion), break immediately to fallback provider
+          break;
         }
       }
     } catch (e) {
@@ -501,34 +821,50 @@ Duration: ${payload.durations[q.id] || 0}s`,
   // 2. Try OpenAI Fallback
   if (openAiKey) {
     try {
-      const resp = await fetchWithRetry(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${openAiKey}`,
+      let promptToUse = promptContent;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const resp = await fetchWithRetry(
+          "interview/evaluate.openai",
+          "https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${openAiKey}`,
+            },
+            body: JSON.stringify({
+              model: LLM_MODEL_FALLBACK,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: promptToUse },
+              ],
+              response_format: { type: "json_object" },
+              temperature: attempt === 0 ? 0.1 : 0.0,
+            }),
           },
-          body: JSON.stringify({
-            model: LLM_MODEL_FALLBACK,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: promptContent },
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.1,
-          }),
-        },
-        TIMEOUT_LLM,
-      );
+          TIMEOUT_LLM,
+        );
 
-      if (resp.ok) {
-        const data = await resp.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (content) {
-          const parsed = JSON.parse(content);
-          console.log(`[interview/evaluate] Evaluated via OpenAI in ${Date.now() - t0}ms`);
-          return formatEvaluatedScorecard(parsed, payload);
+        if (resp.ok) {
+          const data = await resp.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (content) {
+            try {
+              const rawJson = JSON.parse(content);
+              const validated = LlmEvaluateResponseSchema.safeParse(rawJson);
+              if (validated.success) {
+                console.log(`[interview/evaluate] Evaluated via OpenAI in ${Date.now() - t0}ms`);
+                return processLlmResponse(validated.data, LLM_MODEL_FALLBACK);
+              } else if (attempt === 0) {
+                promptToUse += `\n\nSCHEMA VALIDATION ERRORS FROM PREVIOUS ATTEMPT (FIX STRICTLY):\n${validated.error.issues.map((i) => i.message).join("\n")}`;
+              }
+            } catch (parseErr) {
+              console.warn("[interview/evaluate] OpenAI JSON parse error:", parseErr);
+            }
+          }
+        } else {
+          // On non-OK HTTP status (e.g. 429 quota exhaustion), break immediately to fallback provider
+          break;
         }
       }
     } catch (e) {
@@ -544,78 +880,8 @@ Duration: ${payload.durations[q.id] || 0}s`,
     payload.questions as InterviewQuestion[],
     payload.answers,
     payload.durations,
+    payload.language,
   );
-}
-
-function formatEvaluatedScorecard(
-  parsed: Record<string, unknown>,
-  payload: EvaluateRequest,
-): InterviewScorecard {
-  const totalDuration = Object.values(payload.durations).reduce((a, b) => a + b, 0);
-  const mins = Math.floor(totalDuration / 60);
-  const secs = totalDuration % 60;
-  const categories = (parsed.categories as Record<string, number>) || {};
-  const parsedAnswers = (parsed.answers as Array<Record<string, unknown>>) || [];
-
-  return {
-    candidateName: payload.candidateName,
-    targetJobTitle: payload.targetJobTitle,
-    overallScore: Math.round(Number(parsed.overallScore) || 0),
-    fitVerdict:
-      (parsed.fitVerdict as InterviewScorecard["fitVerdict"]) ||
-      (Number(parsed.overallScore) >= 75
-        ? "Strong Fit"
-        : Number(parsed.overallScore) >= 50
-          ? "Moderate Fit"
-          : "Developing Fit"),
-    completedAt: new Date().toISOString(),
-    durationFormatted: `${mins > 0 ? `${mins}m ` : ""}${secs}s`,
-    categories: {
-      technicalAccuracy: Math.round(categories.technicalAccuracy || 0),
-      communicationClarity: Math.round(categories.communicationClarity || 0),
-      problemSolving: Math.round(categories.problemSolving || 0),
-      practicalEvidence: Math.round(categories.practicalEvidence || 0),
-    },
-    answers: payload.questions.map((q) => {
-      const evaluatedAnswer = parsedAnswers.find((a) => a.questionId === q.id);
-      const rawAnswer = (payload.answers[q.id] || "").trim();
-      const isUnanswered = !rawAnswer || rawAnswer === "[Unanswered]";
-      const isTrivial =
-        rawAnswer.length < 3 || /^(hello|hi|hey|s|asdf|wfdf|pass|idk)$/i.test(rawAnswer);
-
-      const metrics = (evaluatedAnswer?.metrics as Record<string, number>) || {};
-
-      return {
-        questionId: q.id,
-        question: q.question,
-        phaseLabel: q.phaseLabel,
-        transcribedAnswer: rawAnswer || "[Unanswered / Skipped]",
-        durationSeconds: payload.durations[q.id] || 0,
-        metrics: {
-          technicalScore: isUnanswered || isTrivial ? 0 : Math.round(metrics.technicalScore ?? 35),
-          clarityScore: isUnanswered ? 0 : isTrivial ? 15 : Math.round(metrics.clarityScore ?? 45),
-          relevanceScore: isUnanswered || isTrivial ? 0 : Math.round(metrics.relevanceScore ?? 35),
-        },
-        strengths: isTrivial
-          ? ["Polite engagement or greeting captured."]
-          : (evaluatedAnswer?.strengths as string[]) || ["Answer submitted."],
-        improvements: isTrivial
-          ? [
-              "Response was non-substantive. Provide concrete technical architecture and trade-off details.",
-            ]
-          : (evaluatedAnswer?.gaps as string[]) || ["Elaborate on production failure modes."],
-        evidenceQuotes: (evaluatedAnswer?.evidenceQuotes as string[]) || [],
-        confidence: Number(evaluatedAnswer?.confidence) || 85,
-        modelAnswer: q.idealAnswerOutline || "",
-      };
-    }),
-    keyTakeaways: (parsed.keyTakeaways as string[]) || [],
-    gaps: (parsed.gaps as string[]) || [],
-    recruiterVerificationNotes:
-      (parsed.questionsToVerify as string[]) ||
-      (parsed.recruiterVerificationNotes as string[]) ||
-      [],
-  };
 }
 
 /* ========================================================================== */
@@ -624,7 +890,7 @@ function formatEvaluatedScorecard(
 
 export const TranscribeRequestSchema = z.object({
   audioBase64: z.string(),
-  mimeType: z.string().optional().default("audio/webm"),
+  mimeType: z.string().optional().default("audio/wav"),
   language: z.enum(["en", "hi", "hinglish"]).optional().default("en"),
   fallbackText: z.string().optional().default(""),
 });
@@ -633,20 +899,30 @@ export type TranscribeRequest = z.infer<typeof TranscribeRequestSchema>;
 
 export async function handleSpeechTranscribe(payload: TranscribeRequest) {
   const t0 = Date.now();
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const openAiKey = process.env.OPENAI_API_KEY?.trim();
+  const geminiKey = process.env["GEMINI_API_KEY"]?.trim();
+  const openAiKey = process.env["OPENAI_API_KEY"]?.trim();
 
-  // Strict transcription-only prompt: verbatim, keep Hindi in Devanagari and English in Latin
-  const prompt = `Listen to the audio recording and transcribe it strictly and verbatim.
+  // Language-specific transcription prompts
+  let languageInstruction = "Transcribe English speech verbatim.";
+  if (payload.language === "hi") {
+    languageInstruction =
+      "Transcribe Hindi speech verbatim in Devanagari script. Keep English technical terms in Latin script (e.g., 'React', 'PostgreSQL', 'database').";
+  } else if (payload.language === "hinglish") {
+    languageInstruction =
+      "Transcribe Hinglish (code-mixed Hindi and English) verbatim in Roman script. Keep technical terms in standard English.";
+  }
+
+  const prompt = `Listen to the audio recording carefully and transcribe it strictly and verbatim.
+${languageInstruction}
 Rules:
-- Output ONLY the transcription text. No commentary, no summaries.
-- If code-mixed Hindi and English, keep Hindi words in Devanagari script and English words in Latin script.
-- Mark unclear or cut-off speech as [inaudible].`;
+- Output ONLY the transcription text. No preface, no explanations, no summaries.
+- Mark inaudible, cut-off, or unintelligible speech as [inaudible].`;
 
   // 1. Try Gemini Audio Transcription
-  if (geminiKey && payload.audioBase64.length > 100) {
+  if (geminiKey && payload.audioBase64.length > 50) {
     try {
       const resp = await fetchWithRetry(
+        "speech/transcribe.gemini",
         `https://generativelanguage.googleapis.com/v1beta/models/${STT_MODEL}:generateContent?key=${geminiKey}`,
         {
           method: "POST",
@@ -658,7 +934,7 @@ Rules:
                   { text: prompt },
                   {
                     inlineData: {
-                      mimeType: payload.mimeType,
+                      mimeType: (payload.mimeType || "audio/webm").split(";")[0],
                       data: payload.audioBase64,
                     },
                   },
@@ -678,7 +954,7 @@ Rules:
           return {
             transcript: text,
             provider: "gemini",
-            confidence: 0.95,
+            confidence: null,
           };
         }
       }
@@ -688,16 +964,32 @@ Rules:
   }
 
   // 2. Try OpenAI Whisper if key present
-  if (openAiKey && payload.audioBase64.length > 100) {
+  if (openAiKey && payload.audioBase64.length > 50) {
     try {
       const buffer = Buffer.from(payload.audioBase64, "base64");
-      const blob = new Blob([buffer], { type: payload.mimeType });
+      const mime = (payload.mimeType || "audio/webm").split(";")[0] || "audio/webm";
+      const ext = mime.includes("wav")
+        ? "wav"
+        : mime.includes("mp4")
+          ? "mp4"
+          : mime.includes("mpeg")
+            ? "mp3"
+            : "webm";
+      const blob = new Blob([buffer], { type: mime });
       const formData = new FormData();
-      formData.append("file", blob, "audio.webm");
+      formData.append("file", blob, `audio.${ext}`);
       formData.append("model", "whisper-1");
-      if (payload.language === "hi") formData.append("language", "hi");
+
+      if (payload.language === "en") {
+        formData.append("language", "en");
+      } else if (payload.language === "hi") {
+        formData.append("language", "hi");
+      } else if (payload.language === "hinglish") {
+        formData.append("prompt", "Hinglish: Hindi and English mixed; technical terms in English.");
+      }
 
       const resp = await fetchWithRetry(
+        "speech/transcribe.whisper",
         "https://api.openai.com/v1/audio/transcriptions",
         {
           method: "POST",
@@ -714,7 +1006,7 @@ Rules:
           return {
             transcript: data.text.trim(),
             provider: "openai",
-            confidence: 0.92,
+            confidence: null,
           };
         }
       }
@@ -724,11 +1016,11 @@ Rules:
   }
 
   // 3. Fallback to client-side Web Speech interim caption text
-  console.log(`[speech/transcribe] Falling back to live captions in ${Date.now() - t0}ms`);
+  console.log(`[speech/transcribe] Falling back to client caption text in ${Date.now() - t0}ms`);
   return {
     transcript: payload.fallbackText || "",
     provider: "client_fallback",
-    confidence: 0.8,
+    confidence: null,
   };
 }
 
@@ -739,24 +1031,21 @@ Rules:
 export const SynthesizeRequestSchema = z.object({
   text: z.string().min(1),
   language: z.enum(["en", "hi", "hinglish"]).optional().default("en"),
-  voice: z.string().optional().default(TTS_VOICE),
+  voice: z.string().optional(),
 });
 
 export type SynthesizeRequest = z.infer<typeof SynthesizeRequestSchema>;
 
 export async function handleSpeechSynthesize(payload: SynthesizeRequest) {
-  const openAiKey = process.env.OPENAI_API_KEY?.trim();
+  const openAiKey = process.env["OPENAI_API_KEY"]?.trim();
 
   // If OpenAI key is available, call OpenAI TTS
   if (openAiKey) {
     try {
-      const chosenVoice =
-        payload.voice &&
-        ["alloy", "echo", "fable", "onyx", "nova", "shimmer"].includes(payload.voice)
-          ? payload.voice
-          : TTS_VOICE;
+      const chosenVoice = resolveOpenAiVoice(payload.voice);
 
       const resp = await fetchWithRetry(
+        "speech/synthesize.openai",
         "https://api.openai.com/v1/audio/speech",
         {
           method: "POST",
@@ -765,7 +1054,7 @@ export async function handleSpeechSynthesize(payload: SynthesizeRequest) {
             Authorization: `Bearer ${openAiKey}`,
           },
           body: JSON.stringify({
-            model: "tts-1",
+            model: TTS_MODEL && TTS_MODEL.startsWith("tts-") ? TTS_MODEL : "tts-1",
             input: payload.text,
             voice: chosenVoice,
             response_format: "mp3",

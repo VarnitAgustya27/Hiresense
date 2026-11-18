@@ -1,7 +1,16 @@
 // HireSense AI Interview Evaluation Engine
 // Generates role-grounded questions and computes structured scorecards.
 
-import { generateQuestionsFromDataset } from "@/lib/interview-dataset";
+import {
+  generateInterviewQuestions as plannerGenerateQuestions,
+  type PlanContext,
+} from "@/lib/interview-planner";
+import {
+  computeComposite,
+  aggregateScorecard,
+  type RubricScores,
+  type FitVerdict,
+} from "@/lib/scoring";
 
 export interface InterviewQuestion {
   id: string;
@@ -11,6 +20,7 @@ export interface InterviewQuestion {
   contextHint: string;
   expectedKeywords: string[];
   idealAnswerOutline: string;
+  groundedIn?: string;
 }
 
 export interface CandidateAnswerRecord {
@@ -19,6 +29,12 @@ export interface CandidateAnswerRecord {
   phaseLabel: string;
   transcribedAnswer: string;
   durationSeconds: number;
+  rubric: RubricScores;
+  compositeScore: number;
+  evidenceQuotes: string[];
+  confidence: number | null;
+  englishTranslation?: string | undefined;
+  answerLanguage: "en" | "hi" | "hinglish";
   metrics: {
     technicalScore: number;
     clarityScore: number;
@@ -32,10 +48,14 @@ export interface CandidateAnswerRecord {
 export interface InterviewScorecard {
   candidateName: string;
   targetJobTitle: string;
-  overallScore: number; // 0-100
-  fitVerdict: "Strong Fit" | "Moderate Fit" | "Developing Fit";
+  overallScore: number; // 0-100, computed in code from mean of compositeScores
+  fitVerdict: FitVerdict;
   completedAt: string;
   durationFormatted: string;
+  evaluationSource: "llm" | "deterministic";
+  modelUsed: string;
+  lowConfidence: boolean;
+  language: "en" | "hi" | "hinglish";
   categories: {
     technicalAccuracy: number;
     communicationClarity: number;
@@ -49,14 +69,14 @@ export interface InterviewScorecard {
 }
 
 /**
- * Dynamically builds a 5-question interview plan grounded in the dataset and candidate background.
+ * Dynamically builds a 5-question interview plan grounded in the job and candidate background.
  */
 export function generateInterviewQuestions(
   targetJobTitle: string,
   jobPosting: Record<string, unknown> = {},
-  verificationQuestions: string[] = [],
+  ctx: PlanContext = {},
 ): InterviewQuestion[] {
-  return generateQuestionsFromDataset(targetJobTitle, jobPosting, verificationQuestions);
+  return plannerGenerateQuestions(targetJobTitle, jobPosting, ctx);
 }
 
 /**
@@ -81,6 +101,8 @@ function isTrivialOrGreeting(text: string): { isTrivial: boolean; isGreetingOnly
     "greetings",
     "hey mira",
     "hello mira",
+    "namaste",
+    "namaste mira",
   ]);
   if (greetings.has(trimmed)) {
     return { isTrivial: true, isGreetingOnly: true };
@@ -123,7 +145,28 @@ function isTrivialOrGreeting(text: string): { isTrivial: boolean; isGreetingOnly
 }
 
 /**
- * Computes an objective, evidence-based scorecard from candidate answers.
+ * Detects answer language roughly based on script character distribution.
+ */
+function detectAnswerLanguage(text: string): "en" | "hi" | "hinglish" {
+  const devanagariCount = (text.match(/[\u0900-\u097F]/g) || []).length;
+  const latinCount = (text.match(/[a-zA-Z]/g) || []).length;
+  const total = devanagariCount + latinCount;
+  if (total === 0) return "en";
+  if (devanagariCount / total > 0.4) return "hi";
+  if (
+    /\b(aap|kya|kaise|mein|hai|hain|ko|ke|ki|aur|karna|hoga|karein|apna|apne|bhi|se|hum)\b/i.test(
+      text,
+    )
+  ) {
+    return "hinglish";
+  }
+  return "en";
+}
+
+/**
+ * Deterministic fallback evaluation path.
+ * Computes rubric dimensions via transparent heuristic proxies, then aggregates
+ * strictly via computeComposite and aggregateScorecard.
  */
 export function evaluateInterviewSession(
   candidateName: string,
@@ -131,10 +174,8 @@ export function evaluateInterviewSession(
   questions: InterviewQuestion[],
   answers: Record<string, string>,
   durations: Record<string, number>,
+  language: "en" | "hi" | "hinglish" = "en",
 ): InterviewScorecard {
-  let totalTechnical = 0;
-  let totalClarity = 0;
-  let totalRelevance = 0;
   let substantiveAnswersCount = 0;
 
   const totalDurationSeconds = Object.values(durations).reduce((acc, d) => acc + d, 0);
@@ -148,117 +189,174 @@ export function evaluateInterviewSession(
     const lower = rawAnswer.toLowerCase();
     const words = rawAnswer.split(/\s+/).filter(Boolean);
     const wordCount = words.length;
+    const ansLang = detectAnswerLanguage(rawAnswer);
 
     // Check trivial or greeting
     const { isTrivial, isGreetingOnly } = isTrivialOrGreeting(rawAnswer);
 
-    // Keyword overlap
-    const allTokens = q.expectedKeywords
-      .flatMap((k) => k.toLowerCase().split(/\s+/))
-      .filter((t) => t.length > 2);
+    // Keyword overlap (combines expected keywords and question prompt context)
+    const allTokens = [
+      ...q.expectedKeywords.flatMap((k) => k.toLowerCase().split(/\s+/)),
+      ...q.question.toLowerCase().split(/\s+/),
+    ].filter(
+      (t) => t.length > 2 && !/^(the|and|for|with|that|this|you|your|what|how|about|when)$/.test(t),
+    );
     const matchedTokens = allTokens.filter((token) => lower.includes(token));
-    const matchedCount = matchedTokens.length;
+    const uniqueMatched = Array.from(new Set(matchedTokens));
+    const matchedCount = uniqueMatched.length;
     const tokenRatio =
       allTokens.length > 0
-        ? Math.min(1, matchedCount / Math.max(2, Math.min(5, allTokens.length * 0.4)))
+        ? Math.min(1, matchedCount / Math.max(2, Math.min(5, allTokens.length * 0.2)))
         : 0;
 
-    const matchedNames = Array.from(new Set(matchedTokens));
+    const matchedNames = uniqueMatched;
 
-    let technicalScore = 0;
-    let clarityScore = 0;
-    let relevanceScore = 0;
+    let technicalCorrectness: number = 0;
+    let relevanceCompleteness: number = 0;
+    let communicationClarity: number = 0;
     const strengths: string[] = [];
     const improvements: string[] = [];
+    const evidenceQuotes: string[] = [];
 
     if (wordCount === 0 || rawAnswer === "[Unanswered]") {
-      // Unanswered question
-      technicalScore = 0;
-      clarityScore = 0;
-      relevanceScore = 0;
+      // Unanswered question gets all six dimensions set to 0 (not null)
+      technicalCorrectness = 0;
+      relevanceCompleteness = 0;
+      communicationClarity = 0;
       strengths.push("No answer recorded for this question.");
       improvements.push(
         "No response was captured. Ensure your microphone is active or type your answer before submitting.",
       );
     } else if (isTrivial) {
       if (isGreetingOnly) {
-        technicalScore = 0;
-        clarityScore = 15;
-        relevanceScore = 0;
+        technicalCorrectness = 0;
+        relevanceCompleteness = 0;
+        communicationClarity = 15;
         strengths.push("Polite conversational opening.");
         improvements.push(
           "Answer was only a greeting without technical depth or role experience. Directly address the question prompt with concrete examples.",
         );
       } else {
-        technicalScore = 0;
-        clarityScore = 0;
-        relevanceScore = 0;
+        technicalCorrectness = 0;
+        relevanceCompleteness = 0;
+        communicationClarity = 0;
         strengths.push("No substantive technical content provided.");
         improvements.push(
           "Non-responsive or non-technical input captured. Provide a detailed technical explanation addressing the question requirements.",
         );
       }
     } else if (wordCount < 7 && matchedCount === 0) {
-      // Non-technical brief phrase (e.g. "I don't remember really")
-      technicalScore = 5;
-      clarityScore = 25;
-      relevanceScore = 10;
+      technicalCorrectness = 5;
+      relevanceCompleteness = 10;
+      communicationClarity = 25;
       strengths.push("Brief verbal engagement with topic.");
       improvements.push(
         "Response was too brief and omitted core technical terminology. Expand on system mechanisms and implementation.",
       );
       substantiveAnswersCount++;
     } else {
-      // Substantive answer: score based on keyword depth, technical density, and structure
-      const substanceBonus = wordCount >= 35 ? 24 : wordCount >= 18 ? 16 : wordCount >= 10 ? 8 : 0;
-      const matchBonus =
-        matchedCount >= 3 ? 32 : matchedCount >= 2 ? 24 : matchedCount >= 1 ? 14 : 0;
-      const keywordScore = Math.round(tokenRatio * 32);
+      // Check for Devanagari answers
+      const isDevanagari = ansLang === "hi";
 
-      technicalScore = Math.min(96, Math.max(20, 20 + keywordScore + matchBonus + substanceBonus));
-      clarityScore = Math.min(
-        96,
-        Math.max(
-          40,
-          50 + (wordCount >= 25 ? 26 : wordCount >= 14 ? 18 : 6) + (matchedCount > 0 ? 14 : 0),
-        ),
-      );
-      relevanceScore = Math.min(
-        95,
-        Math.max(25, 25 + Math.round(tokenRatio * 35) + matchBonus + (substanceBonus > 0 ? 10 : 0)),
-      );
-
-      if (matchedCount >= 2) {
-        strengths.push(
-          "Articulated practical experience with context and domain terminology.",
-          `Directly addressed target concepts: ${matchedNames.slice(0, 3).join(", ")}.`,
+      if (isDevanagari) {
+        // Keyword overlap is unreliable for Hindi/Devanagari transcripts; score conservatively based on length & structure
+        technicalCorrectness = wordCount >= 35 ? 75 : wordCount >= 20 ? 65 : 45;
+        communicationClarity = wordCount >= 20 ? 75 : 55;
+        relevanceCompleteness = wordCount >= 25 ? 70 : 50;
+        strengths.push("Articulated practical experience in Hindi with clear verbal flow.");
+        improvements.push(
+          "Elaborate on specific architectural constraints and implementation metrics.",
         );
-      } else if (matchedCount === 1) {
-        strengths.push(`Referenced core domain concept: ${matchedNames[0]}.`);
+        substantiveAnswersCount++;
       } else {
-        strengths.push("Articulated general contextual background.");
+        const substanceBonus =
+          wordCount >= 28 ? 25 : wordCount >= 18 ? 20 : wordCount >= 10 ? 12 : 0;
+        const matchBonus =
+          matchedCount >= 3 ? 34 : matchedCount >= 2 ? 28 : matchedCount >= 1 ? 18 : 0;
+        const keywordScore = Math.round(tokenRatio * 32);
+
+        technicalCorrectness = Math.min(
+          96,
+          Math.max(25, 25 + keywordScore + matchBonus + substanceBonus),
+        );
+        communicationClarity = Math.min(
+          96,
+          Math.max(
+            45,
+            55 + (wordCount >= 20 ? 25 : wordCount >= 14 ? 18 : 6) + (matchedCount > 0 ? 12 : 0),
+          ),
+        );
+        relevanceCompleteness = Math.min(
+          95,
+          Math.max(
+            30,
+            30 + Math.round(tokenRatio * 30) + matchBonus + (substanceBonus > 0 ? 10 : 0),
+          ),
+        );
+
+        if (matchedCount >= 2) {
+          strengths.push(
+            "Articulated practical experience with context and domain terminology.",
+            `Directly addressed target concepts: ${matchedNames.slice(0, 3).join(", ")}.`,
+          );
+        } else if (matchedCount === 1) {
+          strengths.push(`Referenced core domain concept: ${matchedNames[0]}.`);
+        } else {
+          strengths.push("Articulated general contextual background.");
+        }
+
+        if (wordCount < 18) {
+          improvements.push(
+            "Response was concise; expand on specific architectural trade-offs and personal ownership.",
+          );
+        }
+        if (wordCount < 30) {
+          improvements.push(
+            "Could provide concrete production metrics or measurable outcomes from past experience.",
+          );
+        } else {
+          improvements.push(
+            "Consider citing specific automated testing patterns, failure modes, or rollback runbooks.",
+          );
+        }
+        substantiveAnswersCount++;
       }
 
-      if (wordCount < 18) {
-        improvements.push(
-          "Response was concise; expand on specific architectural trade-offs and personal ownership.",
-        );
+      // Extract a plausible verbatim snippet as evidence quote (up to 20 words)
+      if (rawAnswer.length > 20) {
+        const snippet = rawAnswer.split(/[.?!]/)[0] || rawAnswer;
+        const quoteWords = snippet.trim().split(/\s+/).slice(0, 18).join(" ");
+        if (quoteWords.length > 10) {
+          evidenceQuotes.push(quoteWords);
+        }
       }
-      if (wordCount < 30) {
-        improvements.push(
-          "Could provide concrete production metrics or measurable outcomes from past experience.",
-        );
-      } else {
-        improvements.push(
-          "Consider citing specific automated testing patterns, failure modes, or rollback runbooks.",
-        );
-      }
-      substantiveAnswersCount++;
     }
 
-    totalTechnical += technicalScore;
-    totalClarity += clarityScore;
-    totalRelevance += relevanceScore;
+    // Proxy mapping documented in code:
+    // problemSolving and projectUnderstanding derived from mean of technical and relevance.
+    // behavioralEvidence derived from mean of clarity and relevance.
+    const isZero =
+      technicalCorrectness === 0 && relevanceCompleteness === 0 && communicationClarity === 0;
+    const problemSolving = isZero
+      ? 0
+      : Math.round((technicalCorrectness + relevanceCompleteness) / 2);
+    const projectUnderstanding = isZero
+      ? 0
+      : Math.round((technicalCorrectness + relevanceCompleteness) / 2);
+    const behavioralEvidence = isZero
+      ? 0
+      : Math.round((communicationClarity + relevanceCompleteness) / 2);
+
+    const rubric: RubricScores = {
+      technicalCorrectness,
+      problemSolving,
+      projectUnderstanding,
+      relevanceCompleteness,
+      communicationClarity,
+      behavioralEvidence,
+    };
+
+    const compositeScore = computeComposite(rubric);
 
     return {
       questionId: q.id,
@@ -266,10 +364,15 @@ export function evaluateInterviewSession(
       phaseLabel: q.phaseLabel,
       transcribedAnswer: rawAnswer || "No verbal or typed answer captured during session.",
       durationSeconds: duration,
+      rubric,
+      compositeScore,
+      evidenceQuotes,
+      confidence: isZero ? null : 70,
+      answerLanguage: ansLang,
       metrics: {
-        technicalScore,
-        clarityScore,
-        relevanceScore,
+        technicalScore: technicalCorrectness,
+        clarityScore: communicationClarity,
+        relevanceScore: relevanceCompleteness,
       },
       strengths:
         strengths.length > 0 ? strengths : ["Demonstrated engagement with the question topic."],
@@ -281,27 +384,14 @@ export function evaluateInterviewSession(
     };
   });
 
-  const totalQuestions = questions.length || 5;
-  const avgTechnical = Math.round(totalTechnical / totalQuestions);
-  const avgClarity = Math.round(totalClarity / totalQuestions);
-  const avgRelevance = Math.round(totalRelevance / totalQuestions);
-  const avgEvidence = Math.round(avgTechnical * 0.6 + avgRelevance * 0.4);
+  const { overallScore, categories, fitVerdict } = aggregateScorecard(processedAnswers);
 
-  // Overall Score Formula
-  const overall = Math.round(
-    avgTechnical * 0.4 + avgRelevance * 0.25 + avgClarity * 0.2 + avgEvidence * 0.15,
-  );
-  const clampedOverall = Math.min(100, Math.max(0, overall));
-
-  const verdict: InterviewScorecard["fitVerdict"] =
-    clampedOverall >= 75 ? "Strong Fit" : clampedOverall >= 50 ? "Moderate Fit" : "Developing Fit";
-
-  // Dynamic, honest takeaways and gaps grounded in performance
+  // Takeaways & verification notes grounded in score
   let keyTakeaways: string[];
   let gaps: string[];
   let recruiterVerificationNotes: string[];
 
-  if (clampedOverall < 35 || substantiveAnswersCount === 0) {
+  if (overallScore < 35 || substantiveAnswersCount === 0) {
     keyTakeaways = [
       `${candidateName} provided minimal or non-substantive responses across the majority of interview phases.`,
       `Critical gap: Insufficient technical evidence captured to verify competencies required for the ${targetJobTitle} position.`,
@@ -317,10 +407,10 @@ export function evaluateInterviewSession(
       "Verify whether brevity was due to hardware/microphone configuration or candidate unfamiliarity with the stack.",
       "Require a verified portfolio, GitHub repository, or take-home assessment before allocating engineering interview resources.",
     ];
-  } else if (clampedOverall < 65) {
+  } else if (overallScore < 65) {
     keyTakeaways = [
       `${candidateName} demonstrated foundational familiarity with core tools, but responses remained predominantly high-level.`,
-      `Strongest alignment identified in ${avgClarity >= avgTechnical ? "communication clarity and openness" : "familiarity with target technology names"}.`,
+      `Strongest alignment identified in ${categories.communicationClarity >= categories.technicalAccuracy ? "communication clarity and openness" : "familiarity with target technology names"}.`,
       `Technical depth requires deeper probing: candidate named tools without fully detailing implementation constraints or trade-offs.`,
     ];
     gaps = processedAnswers
@@ -339,8 +429,8 @@ export function evaluateInterviewSession(
     ];
   } else {
     keyTakeaways = [
-      `${candidateName} demonstrated ${verdict === "Strong Fit" ? "rigorous technical depth and structured problem solving" : "competent domain knowledge"} across the interview phases.`,
-      `Strongest performance identified in ${avgTechnical >= avgClarity ? "technical architecture and domain terminology" : "articulate communication and clear reasoning"}.`,
+      `${candidateName} demonstrated ${fitVerdict === "Strong Fit" ? "rigorous technical depth and structured problem solving" : "competent domain knowledge"} across the interview phases.`,
+      `Strongest performance identified in ${categories.technicalAccuracy >= categories.communicationClarity ? "technical architecture and domain terminology" : "articulate communication and clear reasoning"}.`,
       `Recommended next step: Proceed to live technical panel focusing on real-world system boundaries and organizational fit.`,
     ];
     gaps = processedAnswers.flatMap((a) => a.improvements).slice(0, 3);
@@ -353,16 +443,15 @@ export function evaluateInterviewSession(
   return {
     candidateName,
     targetJobTitle,
-    overallScore: clampedOverall,
-    fitVerdict: verdict,
+    overallScore,
+    fitVerdict,
     completedAt: new Date().toISOString(),
     durationFormatted,
-    categories: {
-      technicalAccuracy: avgTechnical,
-      communicationClarity: avgClarity,
-      problemSolving: avgRelevance,
-      practicalEvidence: avgEvidence,
-    },
+    evaluationSource: "deterministic",
+    modelUsed: "HireSense Keyword Scorer",
+    lowConfidence: true,
+    language,
+    categories,
     answers: processedAnswers,
     keyTakeaways,
     gaps,

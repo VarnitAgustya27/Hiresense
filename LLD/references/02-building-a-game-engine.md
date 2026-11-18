@@ -7,6 +7,7 @@ Type: Video · Length: 3 min 24 s
 ### Lesson notes
 
 The three key factors for evaluating code quality are readability, extensibility, and correctness.
+
 - Readability: The video underscores the significance of writing code that is easily understood by oneself and fellow engineers. Readable code is crucial for debugging, making changes, and collaborating within a team. It is emphasized that unreadable code increases engineering costs and can negatively impact an organization.
 
 - Extensibility: The code should be designed to be easily extended to accommodate changes in requirements over time. The ability to add new features without significant modifications to existing code reflects positively on team culture and the individual engineer.
