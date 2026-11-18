@@ -131,7 +131,6 @@ export function AiInterviewRoom({
 
   // Question reveal state: question text and hint revealed only after real sound starts
   const [revealedQuestionId, setRevealedQuestionId] = useState<string | null>(null);
-  const [isPreparingOver150ms, setIsPreparingOver150ms] = useState(false);
   const [voiceFailedNotice, setVoiceFailedNotice] = useState(false);
 
   // Single media session from context
@@ -460,18 +459,6 @@ export function AiInterviewRoom({
   const currentQ = sessionQuestions[currentIdx];
   const isPreparing =
     stage === "interview" && Boolean(currentQ) && revealedQuestionId !== currentQ?.id;
-
-  // Anti-flicker: only show skeleton if preparing lasts longer than 150ms
-  useEffect(() => {
-    if (!isPreparing) {
-      setIsPreparingOver150ms(false);
-      return;
-    }
-    const timer = setTimeout(() => {
-      setIsPreparingOver150ms(true);
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [isPreparing]);
 
   // Handle Question advance & rotation (strictly depends only on [stage, currentIdx])
   useEffect(() => {
@@ -1160,50 +1147,16 @@ export function AiInterviewRoom({
                   </button>
                 </div>
 
-                {/* Question Details Card */}
-                <div className="rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.10)] p-5 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#f5f5f5]" />
-                    <span className="text-[12px] font-[600] text-[#8a8a8a]">
-                      {currentQ.phaseLabel}
-                    </span>
+                {/* Voice failure fallback notice */}
+                {voiceFailedNotice && (
+                  <div className="rounded-[16px] bg-[#1a1a1a] border border-amber-500/20 px-4 py-3 text-[12px] text-amber-300">
+                    Voice audio is currently unavailable. Please follow the live transcript below
+                    and answer using voice or text.
                   </div>
-
-                  {isPreparing ? (
-                    isPreparingOver150ms ? (
-                      <div
-                        role="status"
-                        aria-live="polite"
-                        aria-busy="true"
-                        className="space-y-2.5 py-1 min-h-[132px]"
-                      >
-                        <span className="sr-only">Mira is preparing the question.</span>
-                        <div className="h-6 w-[92%] rounded-full bg-[#1a1a1a] animate-pulse motion-reduce:animate-none" />
-                        <div className="h-6 w-[78%] rounded-full bg-[#1a1a1a] animate-pulse motion-reduce:animate-none" />
-                        <div className="h-6 w-[55%] rounded-full bg-[#1a1a1a] animate-pulse motion-reduce:animate-none" />
-                      </div>
-                    ) : (
-                      <div className="min-h-[132px] py-1" aria-hidden="true" />
-                    )
-                  ) : (
-                    <div className="min-h-[132px] space-y-2 py-1">
-                      <h3 className="text-[20px] sm:text-[22px] font-[650] text-[#f5f5f5] tracking-tight leading-snug">
-                        {currentQ.question}
-                      </h3>
-                      <p className="text-[13px] text-[#707070] italic">
-                        Hint: {currentQ.contextHint}
-                      </p>
-                      {voiceFailedNotice && (
-                        <p className="text-[12px] text-[#8a8a8a] mt-2">
-                          Voice is unavailable. Read the question and answer by typing or speaking.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
+                )}
 
                 {/* Synced Transcript Component */}
-                <div className="rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-4 max-h-[260px] overflow-hidden flex flex-col">
+                <div className="rounded-[20px] bg-[#141414] border border-[rgba(255,255,255,0.08)] p-4 min-h-[280px] max-h-[440px] overflow-hidden flex flex-col">
                   <span className="text-[11px] font-[600] text-[#8a8a8a] uppercase tracking-wider mb-2 block">
                     Live Transcript
                   </span>
